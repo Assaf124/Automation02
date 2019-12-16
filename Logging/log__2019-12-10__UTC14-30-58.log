@@ -1,0 +1,18 @@
+2019-12-10 16:30:59,066 - INFO         - __main__             - android_device_manager.py - 19   - AndroidManager object has been created
+2019-12-10 16:30:59,067 - INFO         - __main__             - android_device_manager.py - 198  - Checking if device connected to Wi-Fi
+2019-12-10 16:30:59,117 - DEBUG        - __main__             - android_device_manager.py - 47   - b'List of devices attached\r\nce12160ccbcaec270c\tdevice\r\n\r\n'
+2019-12-10 16:30:59,118 - INFO         - __main__             - android_device_manager.py - 51   - Device UDID is: ce12160ccbcaec270c
+2019-12-10 16:30:59,629 - DEBUG        - __main__             - android_device_manager.py - 142  - The reply message for command: adb -s ce12160ccbcaec270c shell svc wifi enabled -> b''
+2019-12-10 16:30:59,629 - INFO         - __main__             - android_device_manager.py - 143  - Turned Wi-Fi on
+2019-12-10 16:30:59,668 - DEBUG        - __main__             - android_device_manager.py - 69   - b'List of devices attached\r\nce12160ccbcaec270c     device product:heroltexx model:SM_G930F device:herolte transport_id:1\r\n\r\n'
+2019-12-10 16:30:59,668 - INFO         - __main__             - android_device_manager.py - 74   - Device Model is: SM_G930F 
+2019-12-10 16:30:59,705 - DEBUG        - __main__             - android_device_manager.py - 47   - b'List of devices attached\r\nce12160ccbcaec270c\tdevice\r\n\r\n'
+2019-12-10 16:30:59,705 - INFO         - __main__             - android_device_manager.py - 51   - Device UDID is: ce12160ccbcaec270c
+2019-12-10 16:30:59,775 - DEBUG        - __main__             - android_device_manager.py - 93   - b'9\r\n'
+2019-12-10 16:30:59,775 - INFO         - __main__             - android_device_manager.py - 98   - Device OS version: Android 9
+2019-12-10 16:30:59,775 - INFO         - __main__             - android_device_manager.py - 126  - Created successfully desired capabilities dictionary for settings: {'platformName': 'Android', 'deviceName': 'SM_G930F ', 'udid': 'ce12160ccbcaec270c', 'platformVersion': '9', 'appPackage': 'com.android.settings', 'appActivity': '.Settings'}
+2019-12-10 16:31:06,946 - DEBUG        - __main__             - android_device_manager.py - 176  - Open settings menu
+2019-12-10 16:31:08,733 - DEBUG        - __main__             - android_device_manager.py - 180  - Open Network & Internet menu
+2019-12-10 16:31:09,733 - DEBUG        - __main__             - android_device_manager.py - 182  - Open Wi-Fi menu
+2019-12-10 16:31:11,365 - INFO         - __main__             - android_device_manager.py - 186  - Successfully opened Wi-Fi menu
+2019-12-10 16:31:11,551 - INFO         - __main__             - android_device_manager.py - 216  - Found that device is not connected to any Wi-Fi network

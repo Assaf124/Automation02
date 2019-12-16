@@ -459,3 +459,4 @@ if __name__ == '__main__':
     # time.sleep(10)
     # eagle.stop_scan()
     print(eagle.fetch_network_data(''))
+    print('hiii')

@@ -73,6 +73,7 @@ class AndroidManager:
             if pattern:
                 LOGGER.info(f'Device Model is: {pattern.group(1)}')
                 self.device_model = pattern.group(1)
+                self.device_model = self.device_model.strip()
                 return self.device_model
 
         except:
@@ -116,6 +117,7 @@ class AndroidManager:
         self.desired_caps["deviceName"] = self.get_device_model()
         self.desired_caps["udid"] = self.get_device_udid()
         self.desired_caps["platformVersion"] = self.get_device_platform_version()
+        self.desired_caps["automationName"] = "UiAutomator2"
 
         if type == 'chrome':
             self.desired_caps["browserName"] = "Chrome"

@@ -1,14 +1,19 @@
 import logging
 import requests
 import time
+
+import typing
+
 from logger import init_logger
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.common.by import By
-from Conf.page_elements_map import page_elements
 from selenium.webdriver.common.keys import Keys
+from Conf.page_elements_map import page_elements
 from Configuration.auto_configuration import Settings
+import json
 import subprocess
 import re
 # import org.openqa.selenium.Keys
@@ -21,10 +26,12 @@ LOGGER.setLevel(logging.DEBUG)
 
 class EagleController:
     def __init__(self, path):
-        self.session = ''
+        self.session: typing.Optional[requests.Session] = None
         self.driver = ''
         self.device_mac_address = ''
         self.network_ssid = ''
+        self.network_id = ''
+        self.network_key = ''
         self.username = 'admin'
         self.password = 'admin'
         self.element_to_wait_for = ''
@@ -32,12 +39,18 @@ class EagleController:
         self.view_type = ''
         self.element_to_look_for = ''
         self.path = path
-        self.driver = webdriver.Chrome(Settings.PATH_TO_CHROMEDRIVER)
-        self.driver.set_window_size(1800, 1024)
-        # self.driver.maximize_window()
+        self.network_mac_list = list()
+        self.net_mac_to_id_map = {}
+        # Next code is for enable Chrome certificate-ignorance
+        options = Options()
+        options.add_argument('--allow-running-insecure-content')
+        options.add_argument('--ignore-certificate-errors')
+        self.driver = webdriver.Chrome(Settings.PATH_TO_CHROMEDRIVER, chrome_options=options)
+        # self.driver.set_window_size(1800, 1024)
+        self.driver.maximize_window()
         # self.driver.get(Settings.EAGLE_HOME_PAGE_1)
         self.driver.get(self.path)
-        LOGGER.info(f'EagleController object was created')
+        LOGGER.debug(f'EagleController object was created')
         time.sleep(1)
 
     def login(self, username, password):
@@ -52,6 +65,7 @@ class EagleController:
         """
         self.username = username
         self.password = password
+        LOGGER.debug('Performing general login')
         if self.login_eagle(self.username, self.password):
             if self.login_background(self.username, self.password):
                 LOGGER.info(f'Performed a successful login')
@@ -72,8 +86,9 @@ class EagleController:
 
         with requests.Session() as self.session:
             data = {"username": self.username, "password": self.password}
-            response = self.session.post(f'{self.path}/auth/login', json=data, verify=False)
+            response = self.session.post(f'{self.path}/api/auth/login', json=data, verify=False)
             # Verifying login status
+            LOGGER.debug(f'{response}')
             json = response.json()
             if json['status'] == 'Success':
                 LOGGER.info(f'Performed a successful background login:  {response.json()}')
@@ -91,18 +106,18 @@ class EagleController:
                     False for unsuccessful login
         """
         try:
-            LOGGER.info(f'performing login (username) using the next username: {self.username}')
+            LOGGER.debug(f'performing login (username) using the next username: {self.username}')
             element = self.driver.find_element_by_id('username')
             element.click()
             element.send_keys(self.username)
 
-            LOGGER.info(f'performing login (password) using the next password: {self.password}')
+            LOGGER.debug(f'performing login (password) using the next password: {self.password}')
             element = self.driver.find_element_by_id('password')
             element.click()
             element.send_keys(self.password)
             time.sleep(1)
 
-            LOGGER.info(f'performing login submit')
+            LOGGER.debug(f'performing login submit')
             element = self.driver.find_element_by_xpath('//*[@id="app"]/div/form/div[4]/button')
             element.click()
             LOGGER.info(f'Performed a successful UI login')
@@ -138,7 +153,7 @@ class EagleController:
         :return:    True for successful operation
                     False for unsuccessful operation
         """
-        LOGGER.info(f'Got request to start system scan')
+        LOGGER.info(f'Sending request to start system scan')
         response = self.session.get(f'{self.path}/interception/scan/start', verify=False)
         # Verifying operation status
         json = response.json()
@@ -393,20 +408,36 @@ class EagleController:
         Fetches a dictionary of the next format:
         {ssid: "DoNotConnect", bssid: "84:16:f9:7d:b0:43",…}
         and returns the corresponding MAC address of the ssid
-        :return:    Network MAC address
+        :return:    List() of Network MAC addresses
                     None
+                    False
         """
+        # self.network_mac_list = list()
+        self.net_mac_to_id_map = {}
         LOGGER.info(f'Trying to fetch networks data')
+        LOGGER.debug(f'Sending request: {self.path}/interception/networks/data')
         response = self.session.get(f'{self.path}/interception/networks/data', verify=False)
-        # Verifying operation status
-        json = response.json()
-        if json['status'] == 'Success':
-            LOGGER.info(f'Was able to fetch networks data:  {response.json()}')
-
-            return True
-        else:
-            LOGGER.error(f'Failed to ... :  {response.json()}')
-            return None
+        LOGGER.debug(f'received response: {response}')
+        # Verifying server status code
+        if response.status_code != 200:
+            LOGGER.info(f'Did not receive code 200, but the next status code:  {response.status_code}')
+            return False
+        # Verifying json status
+        try:
+            json = response.json()
+            if json['status'] == 'Success':
+                LOGGER.debug(f'Was able to fetch networks data:  {response.json()}')
+                for i in json["networks"]:
+                    if i["ssid"] == network_ssid:
+                        self.net_mac_to_id_map[i["bssid"]] = [i["id"]]
+                        # self.network_mac_list.append(i["bssid"])
+                return self.net_mac_to_id_map
+            else:
+                LOGGER.error(f'Did not receive "Success" status:\n  {response.json()}')
+                return None
+        except:
+            LOGGER.error(f'Failed to fetch networks data')
+            return False
 
     def start_network_scan(self, ssid):
         """
@@ -414,8 +445,19 @@ class EagleController:
         :param ssid:
         :return:
         """
-
-        self.network_ssid = ssid
+        self.fetch_network_data(ssid)
+        try:
+            for id in self.net_mac_to_id_map.values():
+                url = f'{self.path}interception/network/scan/start'
+                payload = {"network_id": id}
+                req = self.session.post(url, json=payload, verify=False)
+                LOGGER.debug(f'{req}')
+                LOGGER.info(f'Sent request for deep scan on network {ssid} with id: {id}')
+                time.sleep(1)
+            return True
+        except:
+            LOGGER.error(f'failed to run deep scan on {ssid}')
+            return False
 
     def stop_network_scan(self):
         pass
@@ -429,6 +471,29 @@ class EagleController:
     def is_browsing_history(self):
         pass
 
+    def verify_network_key(self, network_id, network_key):
+        """
+        TBD...
+        :param network_id:
+        :param network_key:
+        :return:
+        """
+        self.network_id = network_id
+        self.network_key = network_key
+        try:
+            url = f'{self.path}interception/encryption/verify?network_id={self.network_id}&key={self.network_key}'
+            LOGGER.info(f'Sending request:  {url}')
+            # self.driver.get(url)
+            response = self.session.get(url, verify=False)
+            # Verifying operation status
+            json = response.json()
+            LOGGER.info(json)
+
+            return True
+        except:
+            LOGGER.error(f'failed to verify network key')
+            return False
+
 
 if __name__ == '__main__':
     init_logger()
@@ -438,8 +503,8 @@ if __name__ == '__main__':
     eagle.login('admin', 'admin')
     eagle.navigate_to_interception_page()
     eagle.wait_element_to_load(page_elements['edit_session_pencil'])
-    print('OK')
-    eagle.switch_main_view('table')
+    # print('OK')
+    # eagle.switch_main_view('table')
 
     # eagle.login_background('admin', 'admin')
     # eagle.login_eagle('admin', 'admin')
@@ -447,8 +512,13 @@ if __name__ == '__main__':
     # eagle.navigate_to_interception_page()
     #
     # eagle.switch_main_view('table')
-    eagle.start_scan()
-    time.sleep(10)
+    # eagle.start_scan()
+    """
+    time.sleep(2)
+    eagle.start_network_scan('tbd')
+    print('Sent request for network scan')
+    time.sleep(5)
+    """
     # eagle.fetch_top_device()
     # eagle.run_search('dddddd')
     # eagle.has_device_to_display()
@@ -458,4 +528,21 @@ if __name__ == '__main__':
     # eagle.switch_main_view('grid')
     # time.sleep(10)
     # eagle.stop_scan()
-    print(eagle.fetch_network_data(''))
+
+    """
+    list_of_networks_mac = eagle.fetch_network_data('DoNotConnect')
+    if list_of_networks_mac is None:
+        print('Network not found')
+    elif list_of_networks_mac is False:
+        print('Error')
+    else:
+        print(f"The network's MAC address is: {list_of_networks_mac}")
+    """
+
+    # eagle.start_network_scan('DoNotConnect')
+    time.sleep(3)
+
+    json_response = eagle.verify_network_key(535, 'Aa123456')
+    print(json_response)
+    time.sleep(3)
+    print('Done')

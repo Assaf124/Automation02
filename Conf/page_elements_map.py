@@ -15,6 +15,7 @@ page_elements = {'main_page_verifier_alternative_1': '//*[@id="app"]/div/div[3]/
                  'session_name':'//*[@id="app"]/div/div[3]/div[1]/div[2]/div/div/div[1]/div[1]/div/span',
                  'table': '//*[@id="app"]/div/div[3]/div[1]/div[1]/div[2]/div/div[2]/div[2]/div/div/div[2]/div[1]/span[4]/span[2]',
                  'grid': '//*[@id="app"]/div/div[3]/div[1]/div[1]/div[2]/div/div[2]/div[2]/div/div/div[2]/div[1]/span[4]/span[1]',
-                 'edit_session_pencil': '//*[@id="app"]/div/div[3]/div[1]/div[1]/div[2]/div/div[1]/div[1]/a',
+                 'edit_session_pencil_old': '//*[@id="app"]/div/div[3]/div[1]/div[1]/div[2]/div/div[1]/div[1]/a',
+                 'edit_session_pencil': '//*[@id="app"]/div/div/div[3]/div[1]/div[1]/div[2]/div/div[1]/div[1]/a',
                  'device_list_top': '//*[@id="app"]/div/div[3]/div[1]/div[1]/div[2]/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[1]/div/table/tbody/tr/td[3]/div',
                  'empty_device_list': '//*[@id="app"]/div/div[3]/div[1]/div[1]/div[2]/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[1]/div/table/tbody/tr[1]/td/div'}

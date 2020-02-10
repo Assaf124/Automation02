@@ -8,7 +8,7 @@ timestamp = datetime.datetime.utcnow().strftime('%Y-%m-%d__UTC%H-%M-%S')
 
 class Settings:
 
-    PATH_TO_CHROMEDRIVER = r'C:\Users\assafa\AppData\Local\Programs\Python\Python36-32\chromedriver\chromedriver.exe'
+    PATH_TO_CHROMEDRIVER = r'C:\Users\assafa\AppData\Local\Programs\Python\Python38-32\chromedriver\chromedriver.exe'
     AP_HOME_PAGE = r'http://192.168.0.1/login.html'
     AP_WIRELESS_SETTINGS_PAGE = r'http://192.168.0.1/settings.html#Advanced/Wireless/WirelessSettings'
 
@@ -19,7 +19,7 @@ class Settings:
 
     WIFI_PROFILES_DIR = os.path.join(wifi_profiles_dir, wifi_profiles_dir_name)
 
-    EAGLE_HOME_PAGE_1 = r'https://192.168.100.206/'
+    EAGLE_HOME_PAGE_1 = r'https://192.168.100.199/'
     EAGLE_HOME_PAGE_2 = r'https://172.16.10.1/'
     TEST_RESOURCE = r'https://automatetheboringstuff.com'
 

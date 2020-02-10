@@ -5,6 +5,8 @@ from logger import init_logger
 from Configuration.auto_configuration import Settings
 from Conf.page_elements_map import page_elements
 
+from selenium import webdriver
+
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.DEBUG)

@@ -478,18 +478,26 @@ class EagleController:
         :param network_key:
         :return:
         """
+        LOGGER.info('Verifying network key')
         self.network_id = network_id
         self.network_key = network_key
         try:
             url = f'{self.path}interception/encryption/verify?network_id={self.network_id}&key={self.network_key}'
-            LOGGER.info(f'Sending request:  {url}')
-            # self.driver.get(url)
+            LOGGER.debug(f'Sending request:  {url}')
             response = self.session.get(url, verify=False)
-            # Verifying operation status
             json = response.json()
-            LOGGER.info(json)
-
-            return True
+            LOGGER.debug(f'Got response: {json}')
+            if json['status'] == 'Success':
+                url = f'{self.path}interception/encryption/key?network_id={self.network_id}&key={self.network_key}'
+                LOGGER.debug(f'Sending request:  {url}')
+                response = self.session.get(url, verify=False)
+                json = response.json()
+                LOGGER.debug(f'Got response: {json}')
+                if json['status'] == 'Success':
+                    return True
+                else:
+                    LOGGER.error('Got error while verifying network key')
+                    return False
         except:
             LOGGER.error(f'failed to verify network key')
             return False
@@ -541,8 +549,5 @@ if __name__ == '__main__':
 
     # eagle.start_network_scan('DoNotConnect')
     time.sleep(3)
-
     json_response = eagle.verify_network_key(535, 'Aa123456')
-    print(json_response)
-    time.sleep(3)
     print('Done')

@@ -1,7 +1,6 @@
 import logging
 import requests
 import time
-
 import typing
 
 from logger import init_logger
@@ -27,17 +26,18 @@ LOGGER.setLevel(logging.DEBUG)
 class EagleController:
     def __init__(self, path):
         self.session: typing.Optional[requests.Session] = None
-        self.driver = ''
-        self.device_mac_address = ''
-        self.network_ssid = ''
-        self.network_id = ''
-        self.network_key = ''
-        self.username = 'admin'
+        self.driver = None
+        self.device_mac_address = None
+        self.network_ssid = None
+        self.network_id = None
+        self.network_key = None
+        self.asset_id = None
+        self.username: str = 'admin'
         self.password = 'admin'
-        self.element_to_wait_for = ''
-        self.reverse_element_to_wait_for = ''
-        self.view_type = ''
-        self.element_to_look_for = ''
+        self.element_to_wait_for = None
+        self.reverse_element_to_wait_for = None
+        self.view_type = None
+        self.element_to_look_for = None
         self.path = path
         self.network_mac_list = list()
         self.net_mac_to_id_map = {}
@@ -86,7 +86,8 @@ class EagleController:
 
         with requests.Session() as self.session:
             data = {"username": self.username, "password": self.password}
-            response = self.session.post(f'{self.path}/api/auth/login', json=data, verify=False)
+            url = f'{self.path}/api/auth/login'
+            response = self.session.post(url, json=data, verify=False)
             # Verifying login status
             LOGGER.debug(f'{response}')
             json = response.json()
@@ -412,11 +413,14 @@ class EagleController:
                     None
                     False
         """
+        LOGGER.info(f'Trying to fetch networks data')
         # self.network_mac_list = list()
         self.net_mac_to_id_map = {}
-        LOGGER.info(f'Trying to fetch networks data')
-        LOGGER.debug(f'Sending request: {self.path}/interception/networks/data')
-        response = self.session.get(f'{self.path}/interception/networks/data', verify=False)
+
+        url = f'{self.path}api/interception/networks'
+
+        LOGGER.debug(f'Sending request:  {url}')
+        response = self.session.get(f' {url}', verify=False)
         LOGGER.debug(f'received response: {response}')
         # Verifying server status code
         if response.status_code != 200:
@@ -462,11 +466,65 @@ class EagleController:
     def stop_network_scan(self):
         pass
 
-    def acquire_device(self):
-        pass
+    def acquire_device(self, asset_id: int, network_id: int):
+        """
+        Acquire device
+        :param asset_id: device identifier
+        :param network_id: network identifier
+        :return: True | False
+        """
+        self.asset_id = asset_id
+        self.network_id = network_id
+        LOGGER.info(f'Acquiring device - asset id: {self.asset_id}')
 
-    def stop_acquire(self):
-        pass
+        try:
+            data = dict()
+            data['acquire_method'] = 0
+            data['asset_id'] = self.asset_id
+            data['network_id'] = self.network_id
+            data['network_name'] = ''
+            data['encryption_type'] = ''
+            data['key'] = ''
+            data['is_current'] = 'true'
+            data['phishing'] = 0
+            data['silent'] = 0
+
+            url = f'{self.path}acquire'
+            LOGGER.debug(f'Issuing POST request: {url}  and body: {data}')
+            response = self.session.post(url, json=data, verify=False)
+            json = response.json()
+            LOGGER.debug(f'Got response: {json}')
+            if json['status'] == 'Success':
+                return True
+            else:
+                return False
+
+        except:
+            LOGGER.error(f'failed to acquire device')
+            return False
+
+    def stop_acquire(self, asset_id):
+        """
+        Release device mitm
+        :param asset_id: device identifier
+        :return: True | False
+        """
+        self.asset_id = asset_id
+        LOGGER.info(f'Let go device - asset id: {self.asset_id}')
+        try:
+            data = dict()
+            data['asset_id'] = self.asset_id
+
+            url = f'{self.path}acquire/let-go'
+            LOGGER.debug(f'Issuing POST request: {url}  and body: {data}')
+            response = self.session.post(url, json=data, verify=False)
+            json = response.json()
+            LOGGER.debug(f'Got response: {json}')
+            if json['status'] == 'Success':
+                return True
+        except:
+            LOGGER.error(f'')
+            return False
 
     def is_browsing_history(self):
         pass
@@ -507,12 +565,12 @@ if __name__ == '__main__':
     init_logger()
     mac1 = ''
     mac2 = ''
-    eagle = EagleController(Settings.EAGLE_HOME_PAGE_1)
+    eagle = EagleController(Settings.EAGLE_HOME_PAGE_2)
     eagle.login('admin', 'admin')
     eagle.navigate_to_interception_page()
     eagle.wait_element_to_load(page_elements['edit_session_pencil'])
-    # print('OK')
-    # eagle.switch_main_view('table')
+    print('OK')
+    eagle.switch_main_view('table')
 
     # eagle.login_background('admin', 'admin')
     # eagle.login_eagle('admin', 'admin')
@@ -537,17 +595,25 @@ if __name__ == '__main__':
     # time.sleep(10)
     # eagle.stop_scan()
 
-    """
-    list_of_networks_mac = eagle.fetch_network_data('DoNotConnect')
+    '''
+    ssid = 'Internet Telcel'
+    # ssid = 'DoNotConnect'
+    # ssid = 'antonio123'
+    list_of_networks_mac = eagle.fetch_network_data(ssid)
     if list_of_networks_mac is None:
         print('Network not found')
     elif list_of_networks_mac is False:
         print('Error')
     else:
         print(f"The network's MAC address is: {list_of_networks_mac}")
-    """
+
 
     # eagle.start_network_scan('DoNotConnect')
-    time.sleep(3)
-    json_response = eagle.verify_network_key(535, 'Aa123456')
+    # time.sleep(3)
+    # json_response = eagle.verify_network_key(535, 'Aa123456')
+    '''
+    time.sleep(5)
+    eagle.acquire_device(22, 67)
+    time.sleep(30)
+    eagle.stop_acquire(22)
     print('Done')

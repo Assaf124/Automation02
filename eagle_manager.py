@@ -2,6 +2,7 @@ import logging
 import requests
 import time
 import typing
+from dataclasses import dataclass
 
 from logger import init_logger
 from selenium import webdriver
@@ -23,6 +24,17 @@ LOGGER.setLevel(logging.DEBUG)
 # LOGGER.setLevel(logging.INFO)
 
 
+# @dataclass
+# class EagleData:
+#     username: str
+#     password: str
+#
+#
+# class EagleController:
+#     def __init__(self, data: EagleData):
+#         self.eagle_data = eagle_data
+
+
 class EagleController:
     def __init__(self, path):
         self.session: typing.Optional[requests.Session] = None
@@ -33,7 +45,7 @@ class EagleController:
         self.network_key = None
         self.asset_id = None
         self.username: str = 'admin'
-        self.password = 'admin'
+        self.password: str = 'admin'
         self.element_to_wait_for = None
         self.reverse_element_to_wait_for = None
         self.view_type = None
@@ -489,17 +501,20 @@ class EagleController:
             data['phishing'] = 0
             data['silent'] = 0
 
+            # data = dict(
+            #     acquire_method=0,
+            #     asset_id=self.asset_id
+            # )
+
             url = f'{self.path}acquire'
             LOGGER.debug(f'Issuing POST request: {url}  and body: {data}')
-            response = self.session.post(url, json=data, verify=False)
+            response = self.session.post(url, json=data, verify=False, timeout=10)
+            if not response.ok:
+                raise IOError(f'Request failed {response}')
             json = response.json()
             LOGGER.debug(f'Got response: {json}')
-            if json['status'] == 'Success':
-                return True
-            else:
-                return False
-
-        except:
+            return json['status'] == 'Success'
+        except Exception:
             LOGGER.error(f'failed to acquire device')
             return False
 
@@ -617,3 +632,5 @@ if __name__ == '__main__':
     time.sleep(30)
     eagle.stop_acquire(22)
     print('Done')
+
+    eagle_data = EagleData('admin', 'admin')

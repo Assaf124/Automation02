@@ -20,7 +20,7 @@ class CSVManager:
         :param file_name:   the .csv file file
         """
         self.file_name = file_name
-        self.entry_params = ''
+        self.entry_params = None
 
         path = Path('./CSVs')
         path.mkdir(parents=True, exist_ok=True)

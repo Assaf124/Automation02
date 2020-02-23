@@ -65,7 +65,7 @@ class EagleController:
         LOGGER.debug(f'EagleController object was created')
         time.sleep(1)
 
-    def login(self, username, password):
+    def login(self, username: str, password: str):
         """
         Calling for two sub methods which perform two types of login:
             - login_eagle()
@@ -85,7 +85,7 @@ class EagleController:
         LOGGER.error(f'Failed to perform login')
         return False
 
-    def login_background(self, username, password):
+    def login_background(self, username: str, password: str):
         """
         Performs login to the Eagle 'in the background' using 'requests' module.
         :param username: Username
@@ -110,7 +110,7 @@ class EagleController:
                 LOGGER.error(f'Failed to performed background login:  {response.json()}')
                 return False
 
-    def login_eagle(self, username, password):
+    def login_eagle(self, username: str, password: str):
         """
         This methos perform login to th eagle managment using selenium.
         :param username: Username
@@ -142,7 +142,7 @@ class EagleController:
             LOGGER.error(f'Was unable to perform UI login using the username: {self.username} and password: {self.password}')
             return False
 
-    def wait_element_to_load(self, element):
+    def wait_element_to_load(self, element: str):
         """
         TBD ...
         :param element: The name of the element we are waiting for ... which is the
@@ -260,7 +260,7 @@ class EagleController:
         except:
             LOGGER.error(f'Was unable to stop system scan')
 
-    def switch_main_view(self, view_type):
+    def switch_main_view(self, view_type: str):
         """
         Switch the device list page view - can be table view or grid view
         :param  view_type: table | grid
@@ -327,7 +327,7 @@ class EagleController:
                 self.clear_search_device_field()
                 time.sleep(2)
 
-    def run_search(self, search_string):
+    def run_search(self, search_string: str):
         """
         Run search in the 'Search Device' field
         :return:    True
@@ -416,7 +416,7 @@ class EagleController:
             LOGGER.error(f'Failed to navigate UI to #/interception/devices')
             return False
 
-    def fetch_network_data(self, network_ssid):
+    def fetch_network_data(self, network_ssid: str):
         """
         Fetches a dictionary of the next format:
         {ssid: "DoNotConnect", bssid: "84:16:f9:7d:b0:43",…}
@@ -490,21 +490,17 @@ class EagleController:
         LOGGER.info(f'Acquiring device - asset id: {self.asset_id}')
 
         try:
-            data = dict()
-            data['acquire_method'] = 0
-            data['asset_id'] = self.asset_id
-            data['network_id'] = self.network_id
-            data['network_name'] = ''
-            data['encryption_type'] = ''
-            data['key'] = ''
-            data['is_current'] = 'true'
-            data['phishing'] = 0
-            data['silent'] = 0
-
-            # data = dict(
-            #     acquire_method=0,
-            #     asset_id=self.asset_id
-            # )
+            data = dict(
+                acquire_method=0,
+                asset_id=self.asset_id,
+                network_id=self.network_id,
+                network_name='',
+                encryption_type='',
+                key='',
+                is_current='true',
+                phishing=0,
+                silent=0
+            )
 
             url = f'{self.path}acquire'
             LOGGER.debug(f'Issuing POST request: {url}  and body: {data}')
@@ -518,7 +514,7 @@ class EagleController:
             LOGGER.error(f'failed to acquire device')
             return False
 
-    def stop_acquire(self, asset_id):
+    def stop_acquire(self, asset_id: int):
         """
         Release device mitm
         :param asset_id: device identifier
@@ -544,7 +540,7 @@ class EagleController:
     def is_browsing_history(self):
         pass
 
-    def verify_network_key(self, network_id, network_key):
+    def verify_network_key(self, network_id: int, network_key: str):
         """
         TBD...
         :param network_id:

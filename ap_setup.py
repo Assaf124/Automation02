@@ -26,13 +26,13 @@ class APManager:
     """
 
     def __init__(self):
-        self.parameters_list = ''
-        self.ssid = ''
-        self.band = ''
-        self.channel = ''
-        self.security = ''
-        self.management_password = ''
-        self.network_key = ''
+        self.parameters_list = None
+        self.ssid = None
+        self.band = None
+        self.channel = None
+        self.security = None
+        self.management_password = None
+        self.network_key = None
         LOGGER.info(f'AccessPoint Setup object has been created')
 
     def connect_to_ap_management(self):

@@ -17,23 +17,23 @@ LOGGER.setLevel(logging.DEBUG)
 class AndroidManager:
     def __init__(self):
         LOGGER.info(f'AndroidManager object has been created')
-        self.udid_reply_msg = ''
-        self.udid = ''
-        self.model_reply_msg = ''
-        self.device_model = ''
-        self.platform_reply_msg = ''
-        self.platform_version = ''
+        self.udid_reply_msg = None
+        self.udid = None
+        self.model_reply_msg = None
+        self.device_model = None
+        self.platform_reply_msg = None
+        self.platform_version = None
         self.desired_caps = dict()
-        self.wifi_enable_reply_msg = ''
-        self.wifi_disable_reply_msg = ''
-        self.driver = ''
-        self.ssid = ''
-        self.wifi_pattern = ''
-        self.ssid_status = ''
-        self.security_type = ''
-        self.wifi_signal_level = ''
-        self.wifi_password = ''
-        self.wifi_connect_success = ''
+        self.wifi_enable_reply_msg = None
+        self.wifi_disable_reply_msg = None
+        self.driver = None
+        self.ssid = None
+        self.wifi_pattern = None
+        self.ssid_status = None
+        self.security_type = None
+        self.wifi_signal_level = None
+        self.wifi_password = None
+        self.wifi_connect_success = None
 
     def get_device_udid(self):
         """

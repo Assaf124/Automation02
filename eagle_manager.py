@@ -135,11 +135,10 @@ class EagleController:
             element.click()
             LOGGER.info(f'Performed a successful UI login')
             time.sleep(1)
-
             return True
 
-        except:
-            LOGGER.error(f'Was unable to perform UI login using the username: {self.username} and password: {self.password}')
+        except Exception as error:
+            LOGGER.error(f'Was unable to perform UI login using the username: {self.username} and password: {self.password}.  Got error: {error}')
             return False
 
     def wait_element_to_load(self, element: str):
@@ -188,8 +187,8 @@ class EagleController:
             element = self.driver.find_element_by_css_selector('.btn.btn-lg.capitalize.btn-loading.red')
             LOGGER.info(f'Found a "Stop Scan" button - system scan is in progress')
             return True
-        except:
-            LOGGER.error(f'Did not find a "Stop Scan" button - no system scan in progress')
+        except Exception as error:
+            LOGGER.error(f'Did not find a "Stop Scan" button - no system scan in progress. Got error: {error}')
             return False
 
     def start_scan_ui(self):
@@ -212,8 +211,8 @@ class EagleController:
             LOGGER.info(f'System scan in progress...')
             time.sleep(1)
 
-        except:
-            LOGGER.error(f'Was unable to run system scan')
+        except Exception as error:
+            LOGGER.error(f'Was unable to run system scan. Got error: {error}')
 
     def stop_scan(self):
         """
@@ -242,7 +241,6 @@ class EagleController:
         https://192.168.100.206/interception/scan/start
         :return: Conf {"status": "Success"}
         """
-
         try:
             element = self.driver.find_element_by_xpath(page_elements['stop_scan_button_verifier_new'])
             element.click()
@@ -257,8 +255,8 @@ class EagleController:
             LOGGER.info(f'System scan was stopped')
             time.sleep(1)
 
-        except:
-            LOGGER.error(f'Was unable to stop system scan')
+        except Exception as error:
+            LOGGER.error(f'Was unable to stop system scan. Got error: {error}')
 
     def switch_main_view(self, view_type: str):
         """
@@ -282,8 +280,9 @@ class EagleController:
             else:
                 LOGGER.warning(f'Got undefined request to switch to {self.view_type} view')
                 return False
-        except:
-            LOGGER.error(f'Failed to switch view')
+
+        except Exception as error:
+            LOGGER.error(f'Failed to switch view. Got error: {error}')
             return False
 
     def search_for_device(self, mac_list):
@@ -317,13 +316,13 @@ class EagleController:
                     # clicking the 'Clear' button
                     self.clear_search_device_field()
 
-                except:
+                except Exception as error:
                     # clicking the 'Clear' button
                     self.clear_search_device_field()
-                    LOGGER.error(f'Was unable to run search-for-device operation')
+                    LOGGER.error(f'Was unable to run search-for-device operation. Got error; {error}')
 
-            except:
-                LOGGER.error(f'Was unable to find device by its MAC address: {self.device_mac_address}')
+            except Exception as error:
+                LOGGER.error(f'Was unable to find device by its MAC address: {self.device_mac_address}. Got error: {error}')
                 self.clear_search_device_field()
                 time.sleep(2)
 
@@ -342,8 +341,9 @@ class EagleController:
             time.sleep(2)
             LOGGER.info(f'Running search for string: {search_string}')
             return True
-        except:
-            LOGGER.error(f'Got an error. was unable to run search for: {search_string}')
+
+        except Exception as error:
+            LOGGER.error(f'Got an error. was unable to run search for: {search_string}. Got error: {error}')
             return False
 
     def clear_search_device_field(self):
@@ -360,8 +360,9 @@ class EagleController:
             clear_button.click()
             time.sleep(1)
             return True
-        except:
-            LOGGER.error(f'Failed to clear search device field')
+
+        except Exception as error:
+            LOGGER.error(f'Failed to clear search device field. Got error: {error}')
             return False
 
     def has_device_to_display(self):
@@ -375,8 +376,9 @@ class EagleController:
             text = self.driver.find_element_by_xpath(page_elements['empty_device_list']).text
             print(text)
             return True
-        except:
-            LOGGER.error(f'')
+
+        except Exception as error:
+            LOGGER.error(f'Got error: {error}')
             return False
 
     def fetch_top_device(self):
@@ -392,12 +394,16 @@ class EagleController:
             LOGGER.info(f'Clicked on list top device')
             return True
 
-        except:
-            LOGGER.error(f'Failed to fetch device top list info')
+        except Exception as error:
+            LOGGER.error(f'Failed to fetch device top list info. Got error: {error}')
             return False
 
     def navigate_to_device_info(self):
-        pass
+        """
+        Navigate to a selected device info page
+        :param device_id:
+        :return: True | False
+        """
 
     def navigate_to_interception_page(self):
         """
@@ -412,8 +418,9 @@ class EagleController:
             self.wait_element_to_load(page_elements['edit_session_pencil'])
             time.sleep(1)
             return True
-        except:
-            LOGGER.error(f'Failed to navigate UI to #/interception/devices')
+
+        except Exception as error:
+            LOGGER.error(f'Failed to navigate UI to #/interception/devices. Got error: {error}')
             return False
 
     def fetch_network_data(self, network_ssid: str):
@@ -451,8 +458,9 @@ class EagleController:
             else:
                 LOGGER.error(f'Did not receive "Success" status:\n  {response.json()}')
                 return None
-        except:
-            LOGGER.error(f'Failed to fetch networks data')
+
+        except Exception as error:
+            LOGGER.error(f'Failed to fetch networks data. Got error: {error}')
             return False
 
     def start_network_scan(self, ssid):
@@ -471,8 +479,9 @@ class EagleController:
                 LOGGER.info(f'Sent request for deep scan on network {ssid} with id: {id}')
                 time.sleep(1)
             return True
-        except:
-            LOGGER.error(f'failed to run deep scan on {ssid}')
+
+        except Exception as error:
+            LOGGER.error(f'failed to run deep scan on {ssid}. Got error; {error}')
             return False
 
     def stop_network_scan(self):
@@ -510,8 +519,9 @@ class EagleController:
             json = response.json()
             LOGGER.debug(f'Got response: {json}')
             return json['status'] == 'Success'
-        except Exception:
-            LOGGER.error(f'failed to acquire device')
+
+        except Exception as error:
+            LOGGER.error(f'failed to acquire device. Gor error: {error}')
             return False
 
     def stop_acquire(self, asset_id: int):
@@ -533,8 +543,9 @@ class EagleController:
             LOGGER.debug(f'Got response: {json}')
             if json['status'] == 'Success':
                 return True
-        except:
-            LOGGER.error(f'')
+
+        except Exception as error:
+            LOGGER.error(f'Got error: {error}')
             return False
 
     def is_browsing_history(self):

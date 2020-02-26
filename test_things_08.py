@@ -1,20 +1,30 @@
-import pymysql
-import requests
+from sshtunnel import SSHTunnelForwarder
+from sqlalchemy import create_engine
 
+server = SSHTunnelForwarder(
+     ('172.16.10.1', 22),
+     ssh_password="coldplay",
+     ssh_username="root",
+     remote_bind_address=('198.51.100.12', 3306)
+     )
 
-# path = 'https://172.16.10.1'
-# with requests.Session() as session:
-#     data = {"username": 'admin', "password": 'admin'}
-#     url = f'{path}/api/auth/login'
-#     response = session.post(url, json=data, verify=False)
-#     json = response.json()
-#     print(json)
+server.start()
 
-# Open database connection
-db = pymysql.connect("198.51.100.12", "root", "coldplay", "apollo")
+# parameters
+user = 'root'
+password = 'coldplay'
+host = 'localhost'
+port = server.local_bind_port
+db = 'apollo'
 
-# prepare a cursor object using cursor() method
-cursor = db.cursor()
+# connect to db and run query
+uri = f'mysql+mysqldb://{user}:{password}@{host}:{port}/{db}?charset=utf8mb4'
+engine = create_engine(uri, echo=False, pool_pre_ping=True)
+con = engine.connect()
+result = con.execute("SELECT id, mac_address FROM device;").fetchall()
+print(result)
 
-# execute SQL query using execute() method.
-cursor.execute("SELECT VERSION()")
+# close connection
+con.invalidate()
+con.close()
+server.stop()

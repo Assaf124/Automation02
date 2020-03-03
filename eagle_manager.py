@@ -4,6 +4,8 @@ import time
 import typing
 from dataclasses import dataclass
 
+from sshtunnel import SSHTunnelForwarder
+from sqlalchemy import create_engine
 from logger import init_logger
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -41,9 +43,9 @@ class EagleController:
         self.driver = None
         self.device_mac_address = None
         self.network_ssid = None
-        self.network_id = None
+        self.network_id: int = None
         self.network_key = None
-        self.asset_id = None
+        self.asset_id: int = None
         self.username: str = 'admin'
         self.password: str = 'admin'
         self.element_to_wait_for = None
@@ -53,6 +55,7 @@ class EagleController:
         self.path = path
         self.network_mac_list = list()
         self.net_mac_to_id_map = {}
+        self.mac_to_asset = {}
         # Next code is for enable Chrome certificate-ignorance
         options = Options()
         options.add_argument('--allow-running-insecure-content')
@@ -487,16 +490,94 @@ class EagleController:
     def stop_network_scan(self):
         pass
 
-    def acquire_device(self, asset_id: int, network_id: int):
+    def build_mac_to_asset(self):
         """
-        Acquire device
+        Creates a dictionary of the form {device_mac_address: asset_id}.
+        Based on running a query on apollo database / device table.
+        In order to run the query it requires SSH tunneling to the box.
+        """
+        try:
+            server = SSHTunnelForwarder(
+                (Settings.SSH_TUNNEL_HOST, Settings.SSH_TUNNEL_PORT),
+                ssh_password=Settings.SSH_TUNNEL_PASSWORD,
+                ssh_username=Settings.SSH_TUNNEL_USERNAME,
+                remote_bind_address=(Settings.LOCAL_DB_IP, Settings.LOCAL_DB_PORT)
+            )
+
+            server.start()
+
+            # db parameters
+            user = Settings.LOCAL_DB_USERNAME
+            password = Settings.LOCAL_DB_PASSWORD
+            host = Settings.LOCAL_DB_HOST
+            port = server.local_bind_port
+            db = Settings.LOCAL_DB_NAME
+
+            # connect to db and run query
+            uri = f'mysql+mysqldb://{user}:{password}@{host}:{port}/{db}?charset=utf8mb4'
+            engine = create_engine(uri, echo=False, pool_pre_ping=True)
+            con = engine.connect()
+            result = con.execute("SELECT id, mac_address FROM device;").fetchall()
+
+            for pair in result:
+                self.mac_to_asset[pair[1]] = pair[0]
+
+            # close connection
+            con.invalidate()
+            con.close()
+            server.stop()
+            print(self.mac_to_asset)
+            return True
+
+        except Exception as error:
+            LOGGER.error(f'Failed to build MAC address to asset id dictionary. Got error: {error}')
+            return False
+
+    def acquire_device_test(self, device_mac: str, network_id: int):
+        """
+        Acquire device TEST - for testing propose only
+        :param device_mac: device MAC address
         :param asset_id: device identifier
         :param network_id: network identifier
         :return: True | False
+        :raise: IOError
         """
-        self.asset_id = asset_id
+        self.asset_id = self.mac_to_asset[device_mac]
         self.network_id = network_id
-        LOGGER.info(f'Acquiring device - asset id: {self.asset_id}')
+        LOGGER.info(f'Acquiring device. MAC: {device_mac}/asset id: {self.asset_id} on network {self.network_id}')
+
+        data = {'acquire_method': 0,
+                'asset_id': 3,
+                'network_id': 16029,
+                'network_name': '',
+                'encryption_type': '',
+                'key': '',
+                'is_current': 'true',
+                'phishing': 0,
+                'silent': 0
+                }
+
+        url = f'{self.path}acquire'
+        LOGGER.debug(f'Issuing POST request: {url}  and body: {data}')
+        response = self.session.post(url, json=data, verify=False)
+        json = response.json()
+        LOGGER.debug(f'Got response: {json}')
+
+        print(json)
+        return
+
+    def acquire_device(self, device_mac: str, network_id: int):
+        """
+        Acquire device
+        :param device_mac: device MAC address
+        :param asset_id: device identifier
+        :param network_id: network identifier
+        :return: True | False
+        :raise: IOError
+        """
+        self.asset_id = self.mac_to_asset[device_mac]
+        self.network_id = network_id
+        LOGGER.info(f'Acquiring device. MAC: {device_mac}/asset id: {self.asset_id} on network {self.network_id}')
 
         try:
             data = dict(
@@ -513,11 +594,11 @@ class EagleController:
 
             url = f'{self.path}acquire'
             LOGGER.debug(f'Issuing POST request: {url}  and body: {data}')
-            response = self.session.post(url, json=data, verify=False, timeout=10)
-            if not response.ok:
-                raise IOError(f'Request failed {response}')
+            response = self.session.post(url, json=data, verify=False)
             json = response.json()
             LOGGER.debug(f'Got response: {json}')
+            if not response.ok:
+                raise IOError(f'Request failed {response}')
             return json['status'] == 'Success'
 
         except Exception as error:
@@ -590,9 +671,14 @@ if __name__ == '__main__':
     eagle = EagleController(Settings.EAGLE_HOME_PAGE_2)
     eagle.login('admin', 'admin')
     eagle.navigate_to_interception_page()
-    eagle.wait_element_to_load(page_elements['edit_session_pencil'])
+    # eagle.wait_element_to_load(page_elements['edit_session_pencil'])
     print('OK')
     eagle.switch_main_view('table')
+    eagle.build_mac_to_asset()
+    eagle.acquire_device('8C:F5:A3:AC:4A:74', 8)
+    # eagle.acquire_device_test('AC:5F:3E:60:28:3C', 33)
+
+    time.sleep(3)
 
     # eagle.login_background('admin', 'admin')
     # eagle.login_eagle('admin', 'admin')
@@ -633,11 +719,11 @@ if __name__ == '__main__':
     # eagle.start_network_scan('DoNotConnect')
     # time.sleep(3)
     # json_response = eagle.verify_network_key(535, 'Aa123456')
-    '''
+
     time.sleep(5)
     eagle.acquire_device(22, 67)
     time.sleep(30)
     eagle.stop_acquire(22)
     print('Done')
-
-    eagle_data = EagleData('admin', 'admin')
+    '''
+    # eagle_data = EagleData('admin', 'admin')

@@ -1,6 +1,7 @@
 import logging
 import eagle_manager
 import time
+import requests
 from logger import init_logger
 from Configuration.auto_configuration import Settings
 from Conf.page_elements_map import page_elements
@@ -23,8 +24,12 @@ if __name__ == "__main__":
             time.sleep(1)
 
     eagle.navigate_to_interception_page()
+    eagle.wait_element_to_load(page_elements['edit_session_pencil'])
+    print('OK')
     eagle.switch_main_view('table')
-    time.sleep(1)
+
+    time.sleep(3)
+
     if eagle.is_scan_running():
         pass
     else:

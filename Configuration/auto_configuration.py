@@ -25,6 +25,18 @@ class Settings:
 
     APPLICATION_MAIN_PATH = r'C:\myDirectory\uvApplication\UV_Application'
 
+    # database (mysql) parameters
+    SSH_TUNNEL_HOST = '172.16.10.1'
+    SSH_TUNNEL_PORT = 22
+    SSH_TUNNEL_PASSWORD = 'coldplay'
+    SSH_TUNNEL_USERNAME = 'root'
+
+    LOCAL_DB_IP = '198.51.100.12'
+    LOCAL_DB_PORT = 3306
+    LOCAL_DB_HOST = 'localhost'
+    LOCAL_DB_USERNAME = 'root'
+    LOCAL_DB_PASSWORD = 'coldplay'
+    LOCAL_DB_NAME = 'apollo'
 
 class Logger:
     APPLICATION_MAIN_PATH = str(Path(__file__).parent.parent)

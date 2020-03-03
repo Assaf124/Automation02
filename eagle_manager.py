@@ -533,39 +533,6 @@ class EagleController:
             LOGGER.error(f'Failed to build MAC address to asset id dictionary. Got error: {error}')
             return False
 
-    def acquire_device_test(self, device_mac: str, network_id: int):
-        """
-        Acquire device TEST - for testing propose only
-        :param device_mac: device MAC address
-        :param asset_id: device identifier
-        :param network_id: network identifier
-        :return: True | False
-        :raise: IOError
-        """
-        self.asset_id = self.mac_to_asset[device_mac]
-        self.network_id = network_id
-        LOGGER.info(f'Acquiring device. MAC: {device_mac}/asset id: {self.asset_id} on network {self.network_id}')
-
-        data = {'acquire_method': 0,
-                'asset_id': 3,
-                'network_id': 16029,
-                'network_name': '',
-                'encryption_type': '',
-                'key': '',
-                'is_current': 'true',
-                'phishing': 0,
-                'silent': 0
-                }
-
-        url = f'{self.path}acquire'
-        LOGGER.debug(f'Issuing POST request: {url}  and body: {data}')
-        response = self.session.post(url, json=data, verify=False)
-        json = response.json()
-        LOGGER.debug(f'Got response: {json}')
-
-        print(json)
-        return
-
     def acquire_device(self, device_mac: str, network_id: int):
         """
         Acquire device

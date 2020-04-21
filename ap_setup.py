@@ -27,20 +27,31 @@ class APManager:
 
     def __init__(self):
         self.parameters_list = None
-        self.ssid = None
+        self.ssid: str = None
         self.band = None
-        self.channel = None
+        self.channel: int = None
         self.security = None
         self.management_password = None
         self.network_key = None
         LOGGER.info(f'AccessPoint Setup object has been created')
 
     def connect_to_ap_management(self):
-        LOGGER.info(f'Opening AccessPoint management portal')
+        """
+        Launch browser and navigates to AP management login page.
+        :return:    True
+                    False
+        """
+        LOGGER.info(f'Navigates to AccessPoint management portal')
         self.driver = webdriver.Chrome(Settings.PATH_TO_CHROMEDRIVER)
         self.driver.set_window_size(1280, 1024)
         time.sleep(1)
-        self.driver.get(Settings.AP_HOME_PAGE)
+        try:
+            self.driver.get(Settings.AP_HOME_PAGE)
+            LOGGER.debug(f'Successfully navigated to portal login page')
+            return True
+        except Exception as error:
+            LOGGER.error(f'Failed to connect to AP management. Got error: {error}')
+            return False
 
     def login_ap(self, password):
         LOGGER.info(f'Performing login to AccessPoint management portal using password: {self.management_password}')

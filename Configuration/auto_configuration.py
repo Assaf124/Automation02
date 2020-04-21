@@ -38,6 +38,7 @@ class Settings:
     LOCAL_DB_PASSWORD = 'coldplay'
     LOCAL_DB_NAME = 'apollo'
 
+
 class Logger:
     APPLICATION_MAIN_PATH = str(Path(__file__).parent.parent)
     LOG_DIR_NAME = 'Logging'

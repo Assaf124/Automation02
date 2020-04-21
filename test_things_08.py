@@ -1,41 +1,20 @@
-from sshtunnel import SSHTunnelForwarder
-from sqlalchemy import create_engine
+import time
 
 
-def mac_to_asset(mac_and_asset_list):
-     """
-     correlates device MAC address to system asset_id
-     """
-     my_dict = dict()
-     for pair in mac_and_asset_list:
-          my_dict[pair[0]] = pair[1]
-     return my_dict
+ssid = 'MRL-Guest'
 
-server = SSHTunnelForwarder(
-     ('172.16.10.1', 22),
-     ssh_password="coldplay",
-     ssh_username="root",
-     remote_bind_address=('198.51.100.12', 3306)
-     )
+test_list = [(1, '70:18:a7:14:cd:c0', 'eq-secure'),
+             (2, '70:18:a7:14:cd:c1', 'eq-apple'),
+             (3, '70:18:a7:14:cd:c2', 'MRL-Guest'),
+             (4, '70:18:a7:14:cd:c3', 'MRL-RnD')]
 
-server.start()
+for item in test_list:
+     if item[2] == ssid:
+          print(f'AP id: {item[0]}\nAP MAC: {item[1]}\nAP Name: {item[2]}')
 
-# parameters
-user = 'root'
-password = 'coldplay'
-host = 'localhost'
-port = server.local_bind_port
-db = 'apollo'
+print(test_list[3][1])
 
-# connect to db and run query
-uri = f'mysql+mysqldb://{user}:{password}@{host}:{port}/{db}?charset=utf8mb4'
-engine = create_engine(uri, echo=False, pool_pre_ping=True)
-con = engine.connect()
-result = con.execute("SELECT id, mac_address FROM device;").fetchall()
-# print(result)
+if ssid in test_list:
+    print('Yes')
 
-print(mac_to_asset(result))
-# close connection
-con.invalidate()
-con.close()
-server.stop()
+

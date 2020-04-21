@@ -54,7 +54,8 @@ class EagleController:
         self.element_to_look_for = None
         self.path = path
         self.network_mac_list = list()
-        self.net_mac_to_id_map = {}
+        self.networks_info = list()
+        self.networks_data_map = {}
         self.mac_to_asset = {}
         # Next code is for enable Chrome certificate-ignorance
         options = Options()
@@ -437,12 +438,12 @@ class EagleController:
         """
         LOGGER.info(f'Trying to fetch networks data')
         # self.network_mac_list = list()
-        self.net_mac_to_id_map = {}
+        self.networks_data_map = {}
 
         url = f'{self.path}api/interception/networks'
 
         LOGGER.debug(f'Sending request:  {url}')
-        response = self.session.get(f' {url}', verify=False)
+        response = self.session.get(f'{url}', verify=False)
         LOGGER.debug(f'received response: {response}')
         # Verifying server status code
         if response.status_code != 200:
@@ -455,9 +456,9 @@ class EagleController:
                 LOGGER.debug(f'Was able to fetch networks data:  {response.json()}')
                 for i in json["networks"]:
                     if i["ssid"] == network_ssid:
-                        self.net_mac_to_id_map[i["bssid"]] = [i["id"]]
+                        self.networks_data_map[i["bssid"]] = [i["id"]]
                         # self.network_mac_list.append(i["bssid"])
-                return self.net_mac_to_id_map
+                return self.networks_data_map
             else:
                 LOGGER.error(f'Did not receive "Success" status:\n  {response.json()}')
                 return None
@@ -466,29 +467,106 @@ class EagleController:
             LOGGER.error(f'Failed to fetch networks data. Got error: {error}')
             return False
 
-    def start_network_scan(self, ssid):
+    def fetch_data_from_db(self):
+        """
+        Fetch all data which is relevant for automation (such as Networks ssid, devices's MAC's etc ...) from database
+        :param:
+        :return:    True
+                    False
+        """
+        LOGGER.info(f'Query DB for data')
+        try:
+            server = SSHTunnelForwarder(
+                (Settings.SSH_TUNNEL_HOST, Settings.SSH_TUNNEL_PORT),
+                ssh_password=Settings.SSH_TUNNEL_PASSWORD,
+                ssh_username=Settings.SSH_TUNNEL_USERNAME,
+                remote_bind_address=(Settings.LOCAL_DB_IP, Settings.LOCAL_DB_PORT)
+            )
+
+            server.start()
+
+            # db parameters
+            user = Settings.LOCAL_DB_USERNAME
+            password = Settings.LOCAL_DB_PASSWORD
+            host = Settings.LOCAL_DB_HOST
+            port = server.local_bind_port
+            db = Settings.LOCAL_DB_NAME
+
+            # connect to db and run query
+            uri = f'mysql+mysqldb://{user}:{password}@{host}:{port}/{db}?charset=utf8mb4'
+            engine = create_engine(uri, echo=False, pool_pre_ping=True)
+            con = engine.connect()
+
+            # Build networks info dictionary
+            # self.networks_info = con.execute("SELECT id, bssid, ssid FROM wifi_network;").fetchall()
+            # print(self.networks_info)
+
+            # Build MAC to Asset correlation
+            result = con.execute("SELECT id, mac_address FROM device;").fetchall()
+            for pair in result:
+                self.mac_to_asset[pair[1]] = pair[0]
+            LOGGER.debug(f'Successfully queried MAC to Asset correlations')
+
+            # Build networks info data structure [(Network_id, MAC, SSID, Probe_id), (), ...]
+            self.networks_info = con.execute(
+                "SELECT apollo.wifi_network.id as network_id, apollo.wifi_network.bssid, "
+                "apollo.wifi_network.ssid, apollo.probe.id as probe_id "
+                "FROM apollo.wifi_network "
+                "INNER JOIN apollo.probe ON apollo.wifi_network.id = apollo.probe.wifi_network_id;").fetchall()
+            LOGGER.debug(f'Successfully queried Networks data')
+
+            # close connection
+            con.invalidate()
+            con.close()
+            server.stop()
+            return True
+
+        except Exception as error:
+            LOGGER.error(f'Failed to fetch data from DB. Got error: {error}')
+            return False
+
+    def fetch_network_data_new(self):
         """
         TBD...
         :param ssid:
         :return:
         """
-        self.fetch_network_data(ssid)
+        LOGGER.info(f'Query DB for networks data')
+        self.networks_data_map = {}
+        self.networks_info = []
         try:
-            for id in self.net_mac_to_id_map.values():
-                url = f'{self.path}interception/network/scan/start'
-                payload = {"network_id": id}
-                req = self.session.post(url, json=payload, verify=False)
-                LOGGER.debug(f'{req}')
-                LOGGER.info(f'Sent request for deep scan on network {ssid} with id: {id}')
-                time.sleep(1)
-            return True
+            server = SSHTunnelForwarder(
+                (Settings.SSH_TUNNEL_HOST, Settings.SSH_TUNNEL_PORT),
+                ssh_password=Settings.SSH_TUNNEL_PASSWORD,
+                ssh_username=Settings.SSH_TUNNEL_USERNAME,
+                remote_bind_address=(Settings.LOCAL_DB_IP, Settings.LOCAL_DB_PORT)
+            )
+
+            server.start()
+
+            # db parameters
+            user = Settings.LOCAL_DB_USERNAME
+            password = Settings.LOCAL_DB_PASSWORD
+            host = Settings.LOCAL_DB_HOST
+            port = server.local_bind_port
+            db = Settings.LOCAL_DB_NAME
+
+            # connect to db and run query
+            uri = f'mysql+mysqldb://{user}:{password}@{host}:{port}/{db}?charset=utf8mb4'
+            engine = create_engine(uri, echo=False, pool_pre_ping=True)
+            con = engine.connect()
+            self.networks_info = con.execute("SELECT id, bssid, ssid FROM wifi_network;").fetchall()
+
+            # close connection
+            con.invalidate()
+            con.close()
+            server.stop()
+
+            return self.networks_info
 
         except Exception as error:
-            LOGGER.error(f'failed to run deep scan on {ssid}. Got error; {error}')
+            LOGGER.error(f'Failed to fetch networks data. Got error: {error}')
             return False
-
-    def stop_network_scan(self):
-        pass
 
     def build_mac_to_asset(self):
         """
@@ -496,6 +574,7 @@ class EagleController:
         Based on running a query on apollo database / device table.
         In order to run the query it requires SSH tunneling to the box.
         """
+        LOGGER.info(f'Build MAC to asset correlations')
         try:
             server = SSHTunnelForwarder(
                 (Settings.SSH_TUNNEL_HOST, Settings.SSH_TUNNEL_PORT),
@@ -526,12 +605,56 @@ class EagleController:
             con.invalidate()
             con.close()
             server.stop()
-            print(self.mac_to_asset)
+            # print(self.mac_to_asset)
+            LOGGER.info(f'Succeeded to build correlations')
             return True
 
         except Exception as error:
             LOGGER.error(f'Failed to build MAC address to asset id dictionary. Got error: {error}')
             return False
+
+    def start_network_scan_new(self, id):
+        """
+        TBD...
+        :param ssid:
+        :return:
+        """
+        try:
+            url = f'{self.path}interception/network/scan/start'
+            payload = {"network_id": id}
+            response = self.session.post(url, json=payload, verify=False)
+            LOGGER.debug(f'{response}')
+            LOGGER.info(f'Sent request for deep scan on network {id} with id: {id}')
+            time.sleep(1)
+            return True
+
+        except Exception as error:
+            LOGGER.error(f'failed to run deep scan on {id}. Got error; {error}')
+            return False
+
+    def start_network_scan(self, ssid):
+        """
+        TBD...
+        :param ssid:
+        :return:
+        """
+        self.fetch_network_data(ssid)
+        try:
+            for id in self.networks_data_map.values():
+                url = f'{self.path}interception/network/scan/start'
+                payload = {"network_id": id}
+                response = self.session.post(url, json=payload, verify=False)
+                LOGGER.debug(f'{response}')
+                LOGGER.info(f'Sent request for deep scan on network {ssid} with id: {id}')
+                time.sleep(1)
+            return True
+
+        except Exception as error:
+            LOGGER.error(f'failed to run deep scan on {ssid}. Got error; {error}')
+            return False
+
+    def stop_network_scan(self):
+        pass
 
     def acquire_device(self, device_mac: str, network_id: int):
         """
@@ -566,19 +689,20 @@ class EagleController:
             LOGGER.debug(f'Got response: {json}')
             if not response.ok:
                 raise IOError(f'Request failed {response}')
+            LOGGER.debug(f'Successfully acquired device: {device_mac}')
             return json['status'] == 'Success'
 
         except Exception as error:
             LOGGER.error(f'failed to acquire device. Gor error: {error}')
             return False
 
-    def stop_acquire(self, asset_id: int):
+    def stop_acquire(self, device_mac: str):
         """
         Release device mitm
-        :param asset_id: device identifier
+        :param device_mac: device MAC address
         :return: True | False
         """
-        self.asset_id = asset_id
+        self.asset_id = self.mac_to_asset[device_mac]
         LOGGER.info(f'Let go device - asset id: {self.asset_id}')
         try:
             data = dict()
@@ -589,8 +713,10 @@ class EagleController:
             response = self.session.post(url, json=data, verify=False)
             json = response.json()
             LOGGER.debug(f'Got response: {json}')
-            if json['status'] == 'Success':
-                return True
+            if not response.ok:
+                raise IOError(f'Let-Go request failed {response}')
+            LOGGER.debug(f'Successfully let-go device: {device_mac}')
+            return json['status'] == 'Success'
 
         except Exception as error:
             LOGGER.error(f'Got error: {error}')
@@ -630,6 +756,13 @@ class EagleController:
             LOGGER.error(f'failed to verify network key')
             return False
 
+    def refresh(self):
+        """
+
+        """
+        LOGGER.debug(f'Refreshing page')
+        self.driver.refresh()
+
 
 if __name__ == '__main__':
     init_logger()
@@ -641,11 +774,17 @@ if __name__ == '__main__':
     # eagle.wait_element_to_load(page_elements['edit_session_pencil'])
     print('OK')
     eagle.switch_main_view('table')
+
+    # eagle.fetch_network_data_new()
+    eagle.fetch_data_from_db()
+
+    time.sleep(30)
     eagle.build_mac_to_asset()
     eagle.acquire_device('8C:F5:A3:AC:4A:74', 8)
     # eagle.acquire_device_test('AC:5F:3E:60:28:3C', 33)
+    time.sleep(30)
+    eagle.stop_acquire('8C:F5:A3:AC:4A:74')
 
-    time.sleep(3)
 
     # eagle.login_background('admin', 'admin')
     # eagle.login_eagle('admin', 'admin')

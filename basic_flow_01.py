@@ -25,7 +25,7 @@ if __name__ == '__main__':
     time.sleep(30)
     eagle.fetch_data_from_db()
     print(eagle.networks_info)
-
+    """
     flag: int = 0
     for item in eagle.networks_info:
         if item[2] == network_ssid:
@@ -36,10 +36,9 @@ if __name__ == '__main__':
             break
     if flag == 0:
         print('Did not find network')
-
+    """
     time.sleep(30)
-    # eagle.build_mac_to_asset()
-    eagle.acquire_device(TestPlanParameters.device_mac, probe_id)
+    eagle.acquire_device(TestPlanParameters.device_mac, TestPlanParameters.tested_network_ssid)
     time.sleep(45)
     eagle.stop_acquire(TestPlanParameters.device_mac)
     print('Done')

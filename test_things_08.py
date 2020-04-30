@@ -1,20 +1,22 @@
 import time
+import logging
+import eagle_manager
+from test_plan_config import TestPlanParameters
+from logger import init_logger
+from Configuration.auto_configuration import Settings
+
+LOGGER = logging.getLogger(__name__)
+LOGGER.setLevel(logging.DEBUG)
 
 
-ssid = 'MRL-Guest'
+if __name__ == "__main__":
+    init_logger()
+    network_bssid = TestPlanParameters.tested_network_bssid
 
-test_list = [(1, '70:18:a7:14:cd:c0', 'eq-secure'),
-             (2, '70:18:a7:14:cd:c1', 'eq-apple'),
-             (3, '70:18:a7:14:cd:c2', 'MRL-Guest'),
-             (4, '70:18:a7:14:cd:c3', 'MRL-RnD')]
-
-for item in test_list:
-     if item[2] == ssid:
-          print(f'AP id: {item[0]}\nAP MAC: {item[1]}\nAP Name: {item[2]}')
-
-print(test_list[3][1])
-
-if ssid in test_list:
-    print('Yes')
-
-
+    eagle = eagle_manager.EagleController(Settings.EAGLE_HOME_PAGE_2)
+    eagle.login('admin', 'admin')
+    eagle.navigate_to_interception_page()
+    eagle.start_scan()
+    time.sleep(20)
+    eagle.fetch_network_data(network_bssid)
+    print(f'SSID: {eagle.tested_network_info["ssid"]}\nChannel: {eagle.tested_network_info["channel"]}')

@@ -15,6 +15,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from Conf.page_elements_map import page_elements
 from Configuration.auto_configuration import Settings
+
 import json
 import subprocess
 import re
@@ -56,6 +57,7 @@ class EagleController:
         self.network_mac_list = list()
         self.networks_info = list()
         self.networks_data_map = {}
+        self.tested_network_info = {}
         self.mac_to_asset = {}
         # Next code is for enable Chrome certificate-ignorance
         options = Options()
@@ -169,9 +171,13 @@ class EagleController:
         :return:    True for successful operation
                     False for unsuccessful operation
         """
-        LOGGER.info(f'Sending request to start system scan')
-        response = self.session.get(f'{self.path}/interception/scan/start', verify=False)
+        url = f'{self.path}api/interception/scan/start'
+        LOGGER.info(f'Sending request to start system scan:  {url}')
+        response = self.session.get(url, verify=False)
         # Verifying operation status
+        if response.status_code != 200:
+            LOGGER.error(f'Did no receive status 200 as expected: {response.status_code}')
+            return False
         json = response.json()
         if json['status'] == 'Success':
             LOGGER.info(f'System scan started successfully:  {response.json()}')
@@ -224,10 +230,13 @@ class EagleController:
         :return:    True for successful operation
                     False for unsuccessful operation
         """
-        LOGGER.info(f'Got request to stop system scan')
-        response = self.session.get(f'{self.path}/interception/scan/stop', verify=False)
-        # LOGGER.info(f'\n1:  {response}\n2:  {response.content}\n3:  {response.json()}')
+        url = f'{self.path}api/interception/scan/stop'
+        LOGGER.info(f'Got request to stop system scan: {url}')
+        response = self.session.get(url, verify=False)
         # Verifying operation status
+        if response.status_code != 200:
+            LOGGER.error(f'Did no receive status 200 as expected: {response.status_code}')
+            return False
         json = response.json()
         if json['status'] == 'Success':
             LOGGER.info(f'System scan stopped successfully:  {response.json()}')
@@ -427,41 +436,37 @@ class EagleController:
             LOGGER.error(f'Failed to navigate UI to #/interception/devices. Got error: {error}')
             return False
 
-    def fetch_network_data(self, network_ssid: str):
+    def fetch_network_data(self, network_bssid: str):
         """
-        Fetches a dictionary of the next format:
-        {ssid: "DoNotConnect", bssid: "84:16:f9:7d:b0:43",…}
-        and returns the corresponding MAC address of the ssid
-        :return:    List() of Network MAC addresses
-                    None
+        Fetches /api/interception/networks json response and parse it.
+        Search for the tested Access Point details.
+        :return:    True
                     False
         """
-        LOGGER.info(f'Trying to fetch networks data')
-        # self.network_mac_list = list()
-        self.networks_data_map = {}
-
+        LOGGER.info(f'Trying to fetch tested network data')
         url = f'{self.path}api/interception/networks'
-
         LOGGER.debug(f'Sending request:  {url}')
-        response = self.session.get(f'{url}', verify=False)
-        LOGGER.debug(f'received response: {response}')
-        # Verifying server status code
-        if response.status_code != 200:
-            LOGGER.info(f'Did not receive code 200, but the next status code:  {response.status_code}')
-            return False
-        # Verifying json status
+
         try:
+            response = self.session.get(f'{url}', verify=False)
+            LOGGER.debug(f'received response: {response}')
+            # Verifying server status code
+            if response.status_code != 200:
+                LOGGER.info(f'Did not receive code 200, but the next status code:  {response.status_code}')
+                return False
+            # Verifying json status
             json = response.json()
             if json['status'] == 'Success':
                 LOGGER.debug(f'Was able to fetch networks data:  {response.json()}')
                 for i in json["networks"]:
-                    if i["ssid"] == network_ssid:
-                        self.networks_data_map[i["bssid"]] = [i["id"]]
-                        # self.network_mac_list.append(i["bssid"])
-                return self.networks_data_map
+                    if i["bssid"] == network_bssid:
+                        self.tested_network_info['channel'] = [i['channel']]
+                        self.tested_network_info['ssid'] = [i['ssid']]
+                        self.tested_network_info['encryption'] = [i['encryption']]
+                    return True
             else:
                 LOGGER.error(f'Did not receive "Success" status:\n  {response.json()}')
-                return None
+                return False
 
         except Exception as error:
             LOGGER.error(f'Failed to fetch networks data. Got error: {error}')
@@ -525,94 +530,6 @@ class EagleController:
             LOGGER.error(f'Failed to fetch data from DB. Got error: {error}')
             return False
 
-    def fetch_network_data_new(self):
-        """
-        TBD...
-        :param ssid:
-        :return:
-        """
-        LOGGER.info(f'Query DB for networks data')
-        self.networks_data_map = {}
-        self.networks_info = []
-        try:
-            server = SSHTunnelForwarder(
-                (Settings.SSH_TUNNEL_HOST, Settings.SSH_TUNNEL_PORT),
-                ssh_password=Settings.SSH_TUNNEL_PASSWORD,
-                ssh_username=Settings.SSH_TUNNEL_USERNAME,
-                remote_bind_address=(Settings.LOCAL_DB_IP, Settings.LOCAL_DB_PORT)
-            )
-
-            server.start()
-
-            # db parameters
-            user = Settings.LOCAL_DB_USERNAME
-            password = Settings.LOCAL_DB_PASSWORD
-            host = Settings.LOCAL_DB_HOST
-            port = server.local_bind_port
-            db = Settings.LOCAL_DB_NAME
-
-            # connect to db and run query
-            uri = f'mysql+mysqldb://{user}:{password}@{host}:{port}/{db}?charset=utf8mb4'
-            engine = create_engine(uri, echo=False, pool_pre_ping=True)
-            con = engine.connect()
-            self.networks_info = con.execute("SELECT id, bssid, ssid FROM wifi_network;").fetchall()
-
-            # close connection
-            con.invalidate()
-            con.close()
-            server.stop()
-
-            return self.networks_info
-
-        except Exception as error:
-            LOGGER.error(f'Failed to fetch networks data. Got error: {error}')
-            return False
-
-    def build_mac_to_asset(self):
-        """
-        Creates a dictionary of the form {device_mac_address: asset_id}.
-        Based on running a query on apollo database / device table.
-        In order to run the query it requires SSH tunneling to the box.
-        """
-        LOGGER.info(f'Build MAC to asset correlations')
-        try:
-            server = SSHTunnelForwarder(
-                (Settings.SSH_TUNNEL_HOST, Settings.SSH_TUNNEL_PORT),
-                ssh_password=Settings.SSH_TUNNEL_PASSWORD,
-                ssh_username=Settings.SSH_TUNNEL_USERNAME,
-                remote_bind_address=(Settings.LOCAL_DB_IP, Settings.LOCAL_DB_PORT)
-            )
-
-            server.start()
-
-            # db parameters
-            user = Settings.LOCAL_DB_USERNAME
-            password = Settings.LOCAL_DB_PASSWORD
-            host = Settings.LOCAL_DB_HOST
-            port = server.local_bind_port
-            db = Settings.LOCAL_DB_NAME
-
-            # connect to db and run query
-            uri = f'mysql+mysqldb://{user}:{password}@{host}:{port}/{db}?charset=utf8mb4'
-            engine = create_engine(uri, echo=False, pool_pre_ping=True)
-            con = engine.connect()
-            result = con.execute("SELECT id, mac_address FROM device;").fetchall()
-
-            for pair in result:
-                self.mac_to_asset[pair[1]] = pair[0]
-
-            # close connection
-            con.invalidate()
-            con.close()
-            server.stop()
-            # print(self.mac_to_asset)
-            LOGGER.info(f'Succeeded to build correlations')
-            return True
-
-        except Exception as error:
-            LOGGER.error(f'Failed to build MAC address to asset id dictionary. Got error: {error}')
-            return False
-
     def start_network_scan_new(self, id):
         """
         TBD...
@@ -656,20 +573,61 @@ class EagleController:
     def stop_network_scan(self):
         pass
 
-    def acquire_device(self, device_mac: str, network_id: int):
+    def _fetch_network_id(self, network_ssid):
+        """
+        Fetch network id
+        :param:     network_ssid
+        :return:    network_id
+                    None
+        """
+        LOGGER.info(f'Query DB for network id info')
+        try:
+            server = SSHTunnelForwarder(
+                (Settings.SSH_TUNNEL_HOST, Settings.SSH_TUNNEL_PORT),
+                ssh_password=Settings.SSH_TUNNEL_PASSWORD,
+                ssh_username=Settings.SSH_TUNNEL_USERNAME,
+                remote_bind_address=(Settings.LOCAL_DB_IP, Settings.LOCAL_DB_PORT)
+            )
+
+            server.start()
+
+            # db parameters
+            user = Settings.LOCAL_DB_USERNAME
+            password = Settings.LOCAL_DB_PASSWORD
+            host = Settings.LOCAL_DB_HOST
+            port = server.local_bind_port
+            db = Settings.LOCAL_DB_NAME
+
+            # connect to db and run query
+            uri = f'mysql+mysqldb://{user}:{password}@{host}:{port}/{db}?charset=utf8mb4'
+            engine = create_engine(uri, echo=False, pool_pre_ping=True)
+            con = engine.connect()
+            result = con.execute(f"SELECT id FROM apollo.wifi_network WHERE ssid = '{network_ssid}';").fetchall()
+
+            # close connection
+            con.invalidate()
+            con.close()
+            server.stop()
+            return result
+
+        except Exception as error:
+            LOGGER.error(f'{error}')
+            return None
+
+    def acquire_device(self, device_mac: str, network_ssid: str):
         """
         Acquire device
         :param device_mac: device MAC address
-        :param asset_id: device identifier
-        :param network_id: network identifier
-        :return: True | False
-        :raise: IOError
+        :param network_ssid: network identifier
+        :return:    True
+                    False
         """
-        self.asset_id = self.mac_to_asset[device_mac]
-        self.network_id = network_id
-        LOGGER.info(f'Acquiring device. MAC: {device_mac}/asset id: {self.asset_id} on network {self.network_id}')
-
         try:
+            self.asset_id = self.mac_to_asset[device_mac]
+            # self.network_id = network_id
+            network_id = self._fetch_network_id(network_ssid)
+            LOGGER.info(f'Acquiring device. MAC: {device_mac}/asset id: {self.asset_id} on network {self.network_id}')
+
             data = dict(
                 acquire_method=0,
                 asset_id=self.asset_id,
@@ -681,14 +639,16 @@ class EagleController:
                 phishing=0,
                 silent=0
             )
-
-            url = f'{self.path}acquire'
+            url = f'{self.path}api/acquire'
             LOGGER.debug(f'Issuing POST request: {url}  and body: {data}')
             response = self.session.post(url, json=data, verify=False)
-            json = response.json()
-            LOGGER.debug(f'Got response: {json}')
+            if response.status_code != 200:
+                LOGGER.error(f'Did not receive the expected status code 200. Got {response.status_code}')
+                return False
             if not response.ok:
                 raise IOError(f'Request failed {response}')
+            json = response.json()
+            LOGGER.debug(f'Got response: {json}')
             LOGGER.debug(f'Successfully acquired device: {device_mac}')
             return json['status'] == 'Success'
 
@@ -708,13 +668,13 @@ class EagleController:
             data = dict()
             data['asset_id'] = self.asset_id
 
-            url = f'{self.path}acquire/let-go'
+            url = f'{self.path}api/acquire/let-go'
             LOGGER.debug(f'Issuing POST request: {url}  and body: {data}')
             response = self.session.post(url, json=data, verify=False)
             json = response.json()
             LOGGER.debug(f'Got response: {json}')
-            if not response.ok:
-                raise IOError(f'Let-Go request failed {response}')
+            # if not response.ok:
+            #     raise IOError(f'Let-Go request failed {response}')
             LOGGER.debug(f'Successfully let-go device: {device_mac}')
             return json['status'] == 'Success'
 

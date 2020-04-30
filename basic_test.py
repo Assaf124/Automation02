@@ -2,7 +2,6 @@ import logging
 import logger
 import eagle_manager
 import android_device_manager
-import configure_ap
 import ap_setup
 import windows_wifi_manager
 import time

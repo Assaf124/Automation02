@@ -2,24 +2,25 @@ import logging
 import requests
 import time
 import typing
-from dataclasses import dataclass
+import re
 
+from Conf.page_elements_map import load_page_element
+
+from action_results import ActionResults
+from datetime import datetime
 from sshtunnel import SSHTunnelForwarder
 from sqlalchemy import create_engine
 from logger import init_logger
 from selenium import webdriver
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as ec
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
 from Conf.page_elements_map import page_elements
 from Configuration.auto_configuration import Settings
-
-import json
-import subprocess
-import re
-# import org.openqa.selenium.Keys
 
 
 LOGGER = logging.getLogger(__name__)
@@ -52,11 +53,14 @@ class EagleController:
         self.element_to_wait_for = None
         self.reverse_element_to_wait_for = None
         self.view_type = None
-        self.element_to_look_for = None
         self.path = path
+        self.page_element: typing.Optional[str] = None
+        self.page_state: typing.Optional[str] = None
         self.network_mac_list = list()
         self.networks_info = list()
         self.networks_data_map = {}
+        self.probe_info = dict()
+        self.wifi_network_info = dict()
         self.tested_network_info = {}
         self.mac_to_asset = {}
         # Next code is for enable Chrome certificate-ignorance
@@ -66,10 +70,32 @@ class EagleController:
         self.driver = webdriver.Chrome(Settings.PATH_TO_CHROMEDRIVER, chrome_options=options)
         # self.driver.set_window_size(1800, 1024)
         self.driver.maximize_window()
-        # self.driver.get(Settings.EAGLE_HOME_PAGE_1)
         self.driver.get(self.path)
         LOGGER.debug(f'EagleController object was created')
-        time.sleep(1)
+        # time.sleep(6)
+
+    def click_by_pos(self, x_pos: int, y_pos: int):
+        """
+
+        """
+        LOGGER.info(f'Click at: {x_pos}, {y_pos}')
+        ActionChains(self.driver).move_by_offset(x_pos, y_pos).click().perform()
+        # ActionChains(self.driver).move_by_offset(x_pos, y_pos).click().perform().release()
+
+    def verify_login_page_loaded(self):
+        """
+        Verify that logain page has been loaded successfully
+        :return:    True
+                    False
+        """
+        try:
+            LOGGER.info(f'Navigating UI to Targets page')
+            login_text = self.driver.find_element_by_class_name("form-title font-green").text
+            return login_text
+
+        except Exception as error:
+            LOGGER.error(f'Login page was not loaded. Got error: {error}')
+            return False
 
     def login(self, username: str, password: str):
         """
@@ -147,23 +173,141 @@ class EagleController:
             LOGGER.error(f'Was unable to perform UI login using the username: {self.username} and password: {self.password}.  Got error: {error}')
             return False
 
-    def wait_element_to_load(self, element: str):
+    def wait_page_load(self, page_name):
         """
-        TBD ...
-        :param element: The name of the element we are waiting for ... which is the
-        :return:
+
         """
-        self.element_to_wait_for = element
+        LOGGER.info(f'Waiting for page to load...')
+        self.page_element = load_page_element[page_name]
+        LOGGER.debug(f'Verifying page has been loaded according to: {page_name}: {self.page_element}')
+        try:
+            for i in range(100):
+                self.page_state = self.driver.execute_script(f'return document.getElementsByTagName("{self.page_element}");')
+                if not self.page_state:
+                    time.sleep(0.5)
+                    LOGGER.debug(f'Iterator value is: {i}, Page load state is: {self.page_state}')
+                else:
+                    break
+            LOGGER.info(f'Page load state is: {self.page_state}')
+            return True
 
-        reverse_load_element_map = {v: k for k, v in page_elements.items()}
-        self.reverse_element_to_wait_for = reverse_load_element_map[self.element_to_wait_for]
+        except Exception as error:
+            LOGGER.error(f'Got error: {error}')
+            return False
 
-        LOGGER.info(f'Waiting for element to load: {self.reverse_element_to_wait_for} -> {self.element_to_wait_for}')
+    def navigate_to_home(self):
+        """
+        Navigates UI to #/Home
+        :return:    True for successful operation
+                    False for unsuccessful operation
+        """
+        try:
+            LOGGER.info(f'Navigate to Home page')
+            self.driver.find_element_by_link_text('Home').click()
+            time.sleep(1)
+            return True
 
-        wait = WebDriverWait(self.driver, 60)
-        wait.until(ec.presence_of_element_located((By.XPATH, self.element_to_wait_for)))
-        LOGGER.debug(f'Element loaded successfully:  {self.element_to_wait_for}')
-        time.sleep(2)
+        except Exception as error:
+            LOGGER.error(f'Failed to navigate "Sensors" page. Got error: {error}')
+            return False
+
+    def navigate_to_targets(self):
+        """
+        Navigates UI to #/project/1
+        :return:    True for successful operation
+                    False for unsuccessful operation
+        """
+        try:
+            LOGGER.info(f'Navigating UI to Targets page')
+            self.driver.find_element_by_link_text('Targets').click()
+            # self.wait_element_to_load(page_elements['edit_session_pencil'])
+            time.sleep(1)
+            return True
+
+        except Exception as error:
+            LOGGER.error(f'Failed to navigate Targets page. Got error: {error}')
+            return False
+
+    def navigate_to_sensors(self):
+        """
+        Navigates UI to #/interception/devices page
+        :return:    True
+                    False
+        """
+        try:
+            LOGGER.info(f'Navigate to Sensors page')
+            self.driver.find_element_by_css_selector('[data-test="sensor"]').click()
+            time.sleep(1)
+            return True
+
+        except Exception as error:
+            LOGGER.error(f'Failed to navigate "Sensors" page. Got error: {error}')
+            return False
+
+    def navigate_to_remote_infections(self):
+        """
+        Navigates UI to #/remote-infections
+        :return:    True for successful operation
+                    False for unsuccessful operation
+        """
+        try:
+            LOGGER.info(f'Navigating UI to Remote Infections page')
+            self.driver.find_element_by_css_selector('[data-test="remote"]').click()
+            time.sleep(1)
+            return True
+
+        except Exception as error:
+            LOGGER.error(f'Failed to navigate "Remote Infections" page. Got error: {error}')
+            return False
+
+    def navigate_to_settings(self):
+        """
+        Navigates UI to #/maintenance/
+        :return:    True for successful operation
+                    False for unsuccessful operation
+        """
+        try:
+            LOGGER.info(f'Navigating UI to Settings page')
+            self.driver.find_element_by_css_selector('a[data-test="setting"]').click()
+            time.sleep(1)
+            return True
+
+        except Exception as error:
+            LOGGER.error(f'Failed to navigate "Settings" page. Got error: {error}')
+            return False
+
+    def open_sensor_interception_page(self):
+        """
+        Navigates UI to the sensor's interception page
+        :return:    True for successful operation
+                    False for unsuccessful operation
+        """
+        try:
+            LOGGER.info(f"Opening the sensor's interception page")
+            element = self.driver.find_element_by_tag_name("button")
+            element.click()
+            return True
+
+        except Exception as error:
+            LOGGER.error(f'Failed to open interception page. Got error: {error}')
+            return False
+
+    def switch_to_new_tab(self):
+        """
+        Switch the robot focus to the sensor's page
+        :return:    True for successful operation
+                    False for unsuccessful operation
+        """
+        try:
+            LOGGER.info(f'switching focus to interception page')
+            self.driver.switch_to.window(self.driver.window_handles[1])
+            time.sleep(3)
+            print(f'Current tab title is: {self.driver.title}')
+            return True
+
+        except Exception as error:
+            LOGGER.error(f'Failed to switch focus. Got error: {error}')
+            return False
 
     def start_scan(self):
         """
@@ -189,40 +333,43 @@ class EagleController:
     def is_scan_running(self):
         """
         Check if system scan is in progress
-        :return:    True
-                    False
+        :return:    1   system scan is in progress
+                    2   no system scan is in progress
+                    3   no indication for system scan. maybe because method was executed on the wrong page
+                    4   failed to check scan status
         """
-        LOGGER.debug(f'Searching if "Stop Scan" button is displayed')
+        LOGGER.info(f'Checking system scan status...')
         try:
-            element = self.driver.find_element_by_css_selector('.btn.btn-lg.capitalize.btn-loading.red')
-            LOGGER.info(f'Found a "Stop Scan" button - system scan is in progress')
-            return True
+            page_source = self.driver.page_source
+            # element = self.driver.find_element_by_css_selector('[data-test="stop_scan"]')
+            if re.search('data-test="stop_scan"', page_source) is not None:
+                LOGGER.info('System scan is in progress')
+                return 1
+            if re.search('data-test="start_scan"', page_source) is not None:
+                LOGGER.info('No System scan is in progress')
+                return 2
+            else:
+                return 3
+
         except Exception as error:
-            LOGGER.error(f'Did not find a "Stop Scan" button - no system scan in progress. Got error: {error}')
-            return False
+            LOGGER.error(f'Failed to check system scan status. Got error: {error}')
+            return 4
 
     def start_scan_ui(self):
         """
-        Deprecated
-        :return:
+        Start system scan by clicking the UI "start Scan" button
+        :return:    True
+                    False
         """
-
         try:
-            element = self.driver.find_element_by_xpath(page_elements['start_stop_scan_button'])
-            element.click()
-            LOGGER.info(f'Clicked the "Start Scan" button')
-
-            # Next code is verifying the Scan indeed started
-            self.element_to_look_for = page_elements['start_scan_button_verifier_new']
-            LOGGER.debug(f'Looking for element: {self.element_to_look_for}')
-            self.wait_element_to_load(self.element_to_look_for)
-            wait = WebDriverWait(self.driver, 120)
-            wait.until(ec.presence_of_element_located((By.XPATH, self.element_to_look_for)))
-            LOGGER.info(f'System scan in progress...')
+            LOGGER.info(f'Starting system scan...')
+            self.driver.find_element_by_css_selector('[data-test="start_scan"]').click()
             time.sleep(1)
+            return True
 
         except Exception as error:
             LOGGER.error(f'Was unable to run system scan. Got error: {error}')
+            return False
 
     def stop_scan(self):
         """
@@ -247,29 +394,19 @@ class EagleController:
 
     def stop_scan_ui(self):
         """
-        Deprecated
-
-        Will edit this method in a way the request for start scan will be done
-        by executing the next GET request:
-        https://192.168.100.206/interception/scan/start
-        :return: Conf {"status": "Success"}
+        Stops system scan by clicking the UI "stop Scan" button
+        :return:    True
+                    False
         """
         try:
-            element = self.driver.find_element_by_xpath(page_elements['stop_scan_button_verifier_new'])
-            element.click()
-            LOGGER.info(f'Clicked the "Stop Scan" button')
-
-            # Next code is verifying the Scan indeed stopped
-            self.element_to_look_for = page_elements['start_scan_button_verifier']
-            LOGGER.debug(f'Looking for element: {self.element_to_look_for}')
-            self.wait_element_to_load(self.element_to_look_for)
-            wait = WebDriverWait(self.driver, 120)
-            wait.until(ec.presence_of_element_located((By.XPATH, self.element_to_look_for)))
-            LOGGER.info(f'System scan was stopped')
+            LOGGER.info(f'Stopping system scan...')
+            self.driver.find_element_by_css_selector('[data-test="stop_scan"]').click()
             time.sleep(1)
+            return True
 
         except Exception as error:
             LOGGER.error(f'Was unable to stop system scan. Got error: {error}')
+            return False
 
     def switch_main_view(self, view_type: str):
         """
@@ -279,132 +416,124 @@ class EagleController:
                     False
         """
         self.view_type = view_type
-        LOGGER.info(f'Got request to switch view to: {self.view_type}')
+        LOGGER.info(f'Got request to switch to: {self.view_type} view')
         try:
             if self.view_type == 'table':
-                element = self.driver.find_element_by_xpath(page_elements['table'])
+                # element = self.driver.find_element_by_xpath(page_elements['table'])
+                element = self.driver.find_element_by_css_selector('[data-test="table_view"]')
                 element.click()
                 LOGGER.info(f'Switching to table view')
                 return True
             elif self.view_type == 'grid':
-                element = self.driver.find_element_by_xpath(page_elements['grid'])
+                element = self.driver.find_element_by_css_selector('[data-test="grid_view"]')
                 element.click()
                 LOGGER.info(f'Switching to grid view')
             else:
-                LOGGER.warning(f'Got undefined request to switch to {self.view_type} view')
+                LOGGER.warning(f'the requested view: {self.view_type} is not supported')
                 return False
 
         except Exception as error:
             LOGGER.error(f'Failed to switch view. Got error: {error}')
             return False
 
-    def search_for_device(self, mac_list):
+    def run_search(self, search_field: str, search_string: str, clear_search: bool):
         """
-        TBD ...
-        :param mac_list
-        :return:
-        """
-        for device_mac in mac_list:
-            self.device_mac_address = device_mac
-            LOGGER.info(f'Searching for device by its MAC address: {self.device_mac_address}')
-            try:
-                element = self.driver.find_element_by_id('autosuggest__input')
-                element.click()
-                element.send_keys(self.device_mac_address)
-                time.sleep(1)
-                element.send_keys(Keys.RETURN)
-                time.sleep(2)
-
-                try:
-                    self.element_to_look_for = page_elements['device_resultset']
-                    LOGGER.info(f'Waiting for element to load: {self.element_to_look_for}')
-                    wait = WebDriverWait(self.driver, 20)
-                    wait.until(ec.presence_of_element_located((By.XPATH, self.element_to_look_for)))
-                    text = self.driver.find_element_by_xpath(self.element_to_look_for).text
-                    if text == 'No devices to display':
-                        LOGGER.error(f'The required device was not found:  {self.device_mac_address}')
-                    else:
-                        LOGGER.info(f'The required device was found:  {self.device_mac_address}')
-
-                    # clicking the 'Clear' button
-                    self.clear_search_device_field()
-
-                except Exception as error:
-                    # clicking the 'Clear' button
-                    self.clear_search_device_field()
-                    LOGGER.error(f'Was unable to run search-for-device operation. Got error; {error}')
-
-            except Exception as error:
-                LOGGER.error(f'Was unable to find device by its MAC address: {self.device_mac_address}. Got error: {error}')
-                self.clear_search_device_field()
-                time.sleep(2)
-
-    def run_search(self, search_string: str):
-        """
-        Run search in the 'Search Device' field
+        Run search in accordance with 'field_name'
+        :param:     search_field    accept the next strings: device | network
+        :param:     search_string   the searched string
+        :param:     clear_search    if True, clear search field once done with search. otherwise leave field with text
         :return:    True
                     False
         """
+        LOGGER.info(f'Run {search_field} search on next string: {search_string}')
         try:
-            element = self.driver.find_element_by_id('autosuggest__input')
+            if search_field == 'device':
+                data_test_field_string = '[data-test="device_search"] input'
+            elif search_field == 'network':
+                data_test_field_string = '[data-test="network_search"]'
+            else:
+                LOGGER.error(f'The input parameter: {search_field} - is not supported')
+                return False
+            element = self.driver.find_element_by_css_selector(data_test_field_string)
             element.click()
+            time.sleep(1)
             element.send_keys(search_string)
             time.sleep(1)
             element.send_keys(Keys.RETURN)
-            time.sleep(2)
-            LOGGER.info(f'Running search for string: {search_string}')
-            return True
-
-        except Exception as error:
-            LOGGER.error(f'Got an error. was unable to run search for: {search_string}. Got error: {error}')
-            return False
-
-    def clear_search_device_field(self):
-        """
-        Clears the UI search device field
-        :return:    True
-                    False
-        """
-        try:
-            LOGGER.info(f'Clearing the search device field')
             time.sleep(1)
-            # clear_button = self.driver.find_element_by_css_selector('.clear-search')
-            clear_button = self.driver.find_element_by_css_selector('[data-test="clear_search"]')
-            clear_button.click()
-            time.sleep(1)
-            return True
+            if search_field == 'device':
+                time.sleep(10)
+                elements = self.driver.find_elements_by_css_selector('[data-test="device_item"]')
+                LOGGER.debug(f'elements long is: {len(elements)}\n{elements}')
+                if len(elements) == 1:
+                    LOGGER.info(f'The tested device, {search_string}, was detected')
+                    if clear_search:
+                        self._clear_search_field('device')
+                    return True
+                else:
+                    LOGGER.info(f'Was not able to detect {search_string} device')
+                    if clear_search:
+                        self._clear_search_field('device')
+                    return False
+
+            if search_field == 'network':
+                elements = self.driver.find_elements_by_css_selector('[data-test="network_item"]')
+                if len(elements) == 2:
+                    LOGGER.info(f'The tested network, {search_string}, was detected')
+                    if clear_search:
+                        self._clear_search_field('network')
+                    return True
+                else:
+                    LOGGER.info(f'Was not able to detect {search_string} network')
+                    if clear_search:
+                        self._clear_search_field('network')
+                    return False
 
         except Exception as error:
-            LOGGER.error(f'Failed to clear search device field. Got error: {error}')
+            LOGGER.error(f'Failed to run {search_field} search for {search_string} string. Got error: {error}')
             return False
 
-    def has_device_to_display(self):
+    def _clear_search_field(self, field_name: str):
         """
-        Checks if any device is displayed on list following applying a filtering string.
+        Clear search field according to 'field_name'
+        :param:     field_name      accept the next strings: device | network
         :return:    True
                     False
         """
-        LOGGER.info(f'Check if device appears in list')
+        LOGGER.info(f'Clearing the {field_name} search field')
         try:
-            text = self.driver.find_element_by_xpath(page_elements['empty_device_list']).text
-            print(text)
+            if field_name == 'device':
+                data_test_string = '[data-test="clear_search"]'
+                self.driver.find_element_by_css_selector(data_test_string).click()
+            elif field_name == 'network':
+                data_test_string = '[data-test="network_search"]'
+                element = self.driver.find_element_by_css_selector(data_test_string)
+                element.click()
+                time.sleep(1)
+                element.send_keys(Keys.CONTROL, 'a')
+                time.sleep(1)
+                element.send_keys(Keys.DELETE)
+            else:
+                LOGGER.error(f'The input parameter: {field_name} - is not supported')
+                return False
             return True
 
         except Exception as error:
-            LOGGER.error(f'Got error: {error}')
+            LOGGER.error(f'Failed to clear {field_name} search field. Got error: {error}')
             return False
 
-    def fetch_top_device(self):
+    def click_top_device(self):
         """
-        Fetch info of the device at list top
+        Click on the device at list top
         :return:    True
                     False
         """
-        LOGGER.info(f'Fetching device list top info')
+        LOGGER.info(f'Fetching top list device')
         try:
-            element = self.driver.find_element_by_xpath(page_elements['device_list_top'])
-            element.click()
-            LOGGER.info(f'Clicked on list top device')
+            elements = self.driver.find_elements_by_css_selector('[data-test="device_item"]')
+            # LOGGER.debug(f'Found the next {len(elements)} device items:\n{elements}')
+            elements[0].click()
+            LOGGER.info(f'Clicked on top list device')
             return True
 
         except Exception as error:
@@ -414,26 +543,17 @@ class EagleController:
     def navigate_to_device_info(self):
         """
         Navigate to a selected device info page
-        :param device_id:
-        :return: True | False
-        """
-
-    def navigate_to_interception_page(self):
-        """
-        Navigates UI to #/interception/devices page
-        :return:    True for successful operation
-                    False for unsuccessful operation
+        :param:     TBD
+        :return:    True | False
         """
         try:
-            LOGGER.info(f'Navigating UI to #/interception/devices')
-            path = f'{self.path}#/interception/devices'
-            self.driver.get(path)
-            self.wait_element_to_load(page_elements['edit_session_pencil'])
-            time.sleep(1)
+            LOGGER.info(f'Navigating to device info page')
+            # self.driver.find_element_by_link_text('Device Information').click()
+            self.driver.find_element_by_xpath('/html/body/div[2]/div/div/div[3]/div[1]/div[1]/div[2]/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[2]/div/div/div[1]/div[3]/div[2]/div/div[1]/button').click()
             return True
 
         except Exception as error:
-            LOGGER.error(f'Failed to navigate UI to #/interception/devices. Got error: {error}')
+            LOGGER.error(f'{error}')
             return False
 
     def fetch_network_data(self, network_bssid: str):
@@ -497,28 +617,31 @@ class EagleController:
             port = server.local_bind_port
             db = Settings.LOCAL_DB_NAME
 
-            # connect to db and run query
+            # connect to db and run queries
             uri = f'mysql+mysqldb://{user}:{password}@{host}:{port}/{db}?charset=utf8mb4'
             engine = create_engine(uri, echo=False, pool_pre_ping=True)
             con = engine.connect()
 
-            # Build networks info dictionary
-            # self.networks_info = con.execute("SELECT id, bssid, ssid FROM wifi_network;").fetchall()
-            # print(self.networks_info)
-
             # Build MAC to Asset correlation
             result = con.execute("SELECT id, mac_address FROM device;").fetchall()
+            LOGGER.debug(f'Successfully queried device info')
             for pair in result:
                 self.mac_to_asset[pair[1]] = pair[0]
-            LOGGER.debug(f'Successfully queried MAC to Asset correlations')
+            LOGGER.debug(f'Successfully populated MAC to Asset data structure')
 
-            # Build networks info data structure [(Network_id, MAC, SSID, Probe_id), (), ...]
-            self.networks_info = con.execute(
-                "SELECT apollo.wifi_network.id as network_id, apollo.wifi_network.bssid, "
-                "apollo.wifi_network.ssid, apollo.probe.id as probe_id "
-                "FROM apollo.wifi_network "
-                "INNER JOIN apollo.probe ON apollo.wifi_network.id = apollo.probe.wifi_network_id;").fetchall()
-            LOGGER.debug(f'Successfully queried Networks data')
+            # Build probe_info data structure {'ssid': ['id', 'asset_id', 'ssid', did_connect, wifi_network_id]}
+            probe_info = con.execute('SELECT * FROM apollo.probe;').fetchall()
+            LOGGER.debug(f'Successfully queried probe info')
+            for item in probe_info:
+                self.probe_info[item[2]] = item
+            LOGGER.debug(f'Successfully populated probe_info data structure')
+
+            # Build wifi_network_info data structure {'ssid': [id, bssid, ssid, encryption, key, channel]}
+            wifi_network_info = con.execute('SELECT id, bssid, ssid, encryption, channel FROM apollo.wifi_network;').fetchall()
+            LOGGER.debug(f'Successfully queried wifi_network info')
+            for item in wifi_network_info:
+                self.wifi_network_info[item[2]] = item
+            LOGGER.debug(f'Successfully populated wifi_network_info data structure')
 
             # close connection
             con.invalidate()
@@ -530,48 +653,41 @@ class EagleController:
             LOGGER.error(f'Failed to fetch data from DB. Got error: {error}')
             return False
 
-    def start_network_scan_new(self, id):
+    def start_network_scan(self, id):
         """
         TBD...
         :param ssid:
         :return:
         """
         try:
-            url = f'{self.path}interception/network/scan/start'
+            LOGGER.info(f'Sending request to start network scan on network id: {id}')
+            url = f'{self.path}api/interception/network/scan/start'
             payload = {"network_id": id}
             response = self.session.post(url, json=payload, verify=False)
-            LOGGER.debug(f'{response}')
-            LOGGER.info(f'Sent request for deep scan on network {id} with id: {id}')
+            LOGGER.debug(f'Sent request to start network scan on network id: {id}. Got response: {response}')
             time.sleep(1)
             return True
 
         except Exception as error:
-            LOGGER.error(f'failed to run deep scan on {id}. Got error; {error}')
+            LOGGER.error(f'failed to start network scan on network id {id}. Got error; {error}')
             return False
 
-    def start_network_scan(self, ssid):
+    def stop_network_scan(self, id):
         """
         TBD...
-        :param ssid:
-        :return:
         """
-        self.fetch_network_data(ssid)
         try:
-            for id in self.networks_data_map.values():
-                url = f'{self.path}interception/network/scan/start'
-                payload = {"network_id": id}
-                response = self.session.post(url, json=payload, verify=False)
-                LOGGER.debug(f'{response}')
-                LOGGER.info(f'Sent request for deep scan on network {ssid} with id: {id}')
-                time.sleep(1)
+            LOGGER.info(f'Sending request to stop network scan on network id: {id}')
+            url = f'{self.path}api/interception/network/scan/stop'
+            payload = {"network_id": id}
+            response = self.session.post(url, json=payload, verify=False)
+            LOGGER.debug(f'Sent request to stop network scan on network id: {id}. Got response: {response}')
+            time.sleep(1)
             return True
 
         except Exception as error:
-            LOGGER.error(f'failed to run deep scan on {ssid}. Got error; {error}')
+            LOGGER.error(f'Failed to stop network scan. Got error: {error}')
             return False
-
-    def stop_network_scan(self):
-        pass
 
     def _fetch_network_id(self, network_ssid):
         """
@@ -625,13 +741,12 @@ class EagleController:
         try:
             self.asset_id = self.mac_to_asset[device_mac]
             # self.network_id = network_id
-            network_id = self._fetch_network_id(network_ssid)
-            LOGGER.info(f'Acquiring device. MAC: {device_mac}/asset id: {self.asset_id} on network {self.network_id}')
-
+            network_id = self.probe_info[network_ssid][0]
+            LOGGER.info(f'Acquiring device. MAC: {device_mac}/asset id: {self.asset_id} on network {network_id}')
             data = dict(
                 acquire_method=0,
                 asset_id=self.asset_id,
-                network_id=self.network_id,
+                network_id=network_id,
                 network_name='',
                 encryption_type='',
                 key='',
@@ -654,6 +769,20 @@ class EagleController:
 
         except Exception as error:
             LOGGER.error(f'failed to acquire device. Gor error: {error}')
+            return False
+
+    def acquire_device_ui(self):
+        """
+        Acquire device by clicking the 'acquire' button
+        :return:    True
+                    False
+        """
+        try:
+            pass
+            return True
+
+        except Exception as error:
+            LOGGER.error(f'{error}')
             return False
 
     def stop_acquire(self, device_mac: str):
@@ -682,7 +811,83 @@ class EagleController:
             LOGGER.error(f'Got error: {error}')
             return False
 
-    def is_browsing_history(self):
+    def is_browsing_history(self, verify_url=False, url_to_verify=None):
+        """
+        Verify if browsing history is active. If verify_url=True than method will verify if url_to_verify is exist
+        in browsing history list. in case verify_url=True then url_to_verify has to be supplied too.
+        :return:    True
+                    False
+        """
+        LOGGER.info(f'Navigating to Browsing History...')
+        try:
+            self.driver.find_element_by_link_text('Browsing History').click()
+            time.sleep(1)
+            elements = self.driver.find_elements_by_tag_name('tr td')
+            LOGGER.debug(f'Found the next history elements: {[x.text for x in elements[::3]]}')
+            LOGGER.info(f'Last url was {elements[0].text} at: {elements[2].text}')
+            # elements[2].text holds timestamp in the format of 'YYYY-MM-DD HH-MM-SS'
+            epoch_time_value = self._convert_str_to_epoch(elements[2].text)
+            time_diff = self._verify_time_difference(epoch_time_value)
+            if time_diff == ActionResults.VALID_TIME_DIFFERENCE:
+                return True
+            elif time_diff == ActionResults.INVALID_TIME_DIFFERENCE:
+                return False
+            if verify_url:
+                self._is_exist_url(elements, url_to_verify)
+                return True
+
+        except Exception as error:
+            LOGGER.error(f'Got error: {error}')
+            return False
+
+    def _verify_time_difference(self, timestamp: float):
+        """
+        :param:     timestamp               in the format of epoch time
+        :return:    enum: ReturnValue.YES   in case the time difference between input timestamp and local time <60 sec
+                    enum: ReturnValue.NO    in case the time difference between input timestamp and local time >60 sec
+                    enum: ReturnValue.ERROR in case of exception
+        """
+        try:
+            local_time = datetime.now()
+            LOGGER.info(f'Current local time is: {local_time}')
+            LOGGER.debug(f'Input timestamp: {timestamp}  |  Local time is: {datetime.now().timestamp()}')
+
+            if datetime.now().timestamp() - timestamp < 60:
+                LOGGER.info(f'Found time difference between last URL timestamp and local time <60 seconds')
+                return ActionResults.VALID_TIME_DIFFERENCE
+            else:
+                LOGGER.info(f'Found time difference between last URL timestamp and local time >60 seconds')
+                return ActionResults.INVALID_TIME_DIFFERENCE
+
+        except Exception as error:
+            LOGGER.error(f'Was not able to calculate time difference. Got error: {error}')
+            return ActionResults.ERROR
+
+    def _convert_str_to_epoch(self, timestamp: str):
+        """
+        :return:    epoch_time  an epoch time value (float)
+                    None
+        """
+        try:
+            time_stamp = timestamp.split()
+            date_value = time_stamp[0].split('-')
+            time_value = time_stamp[1].split(':')
+            epoch_time = datetime(int(date_value[0]), int(date_value[1]), int(date_value[2]), int(time_value[0]), int(time_value[1]), int(time_value[2])).timestamp()
+            LOGGER.info(f'Converted the timestamp: {timestamp} to epoch format: {epoch_time}')
+            return epoch_time
+
+        except Exception as error:
+            LOGGER.error(f'')
+            return None
+
+    def _is_exist_url(self, selenium_elements: list, url: str):
+        """
+        Match input url with browsing history urls
+        :param:     selenium_elements   a list of selenium elements in the form of 'url | type | timestamp'
+        :param:     url                 the url to be matched with.
+        :return:    tuple (url, timestamp)
+                    None
+        """
         pass
 
     def verify_network_key(self, network_id: int, network_key: str):
@@ -718,10 +923,109 @@ class EagleController:
 
     def refresh(self):
         """
-
+        Refreshing the web page
         """
         LOGGER.debug(f'Refreshing page')
-        self.driver.refresh()
+        try:
+            self.driver.refresh()
+            return True
+
+        except Exception as error:
+            LOGGER.debug(f'Failed to refresh web page. Got error: {error}')
+            return False
+
+    def is_detecting_ap(self, network_ssid):
+        """
+        Check if a specific access point was detected and displayed on Eagle managment
+        :param:     network_ssid
+        :return:    True
+                    False
+        """
+        try:
+            LOGGER.debug(f'Checking if network {network_ssid} was detected by Eagle')
+            element = self.driver.find_element_by_xpath(page_elements['network_search_box'])
+            element.click()
+            element.send_keys(network_ssid)
+            try:
+                element = self.driver.find_element_by_css_selector("(//div[@class='clearfix mt-list-item network-item'])[1]")
+                LOGGER.debug(f'Network {network_ssid} was found')
+                return True
+            except Exception as error:
+                LOGGER.error(f'Did not find network: {network_ssid}')
+                return False
+
+        except Exception as error:
+            LOGGER.error(f'Got error: {error}')
+            return False
+
+    def end_session(self):
+        """
+
+        """
+        try:
+            self.driver.quit()
+            LOGGER.info(f'Ended Chrome session')
+            return True
+
+        except Exception as error:
+            LOGGER.error(f'Was unable to close Chrome session. Got Error: {error}')
+            return False
 
 
+if __name__ == '__main__':
+    print(f'{time.localtime()} Start...')
+    init_logger()
+    mac1 = 'ac:5f:3e:60:28:3c'
+    mac2 = 'b5:e8:74'
+    mac3 = 'a:'
+    eagle = EagleController(Settings.EAGLE_HOME_PAGE_1)
+    eagle.wait_page_load('login_page')
+    eagle.login('admin', 'admin')
+    eagle.wait_page_load('cube_page')
+    time.sleep(5)
+    eagle.navigate_to_sensors()
+    # eagle.wait_page_load('sensors_page')
+    time.sleep(15)
+    # eagle.start_scan_ui()
+    # time.sleep(30)
+    eagle.switch_main_view('table')
+    # print(eagle.is_scan_running())
+    time.sleep(5)
+    # eagle.run_search('network', 'Test', True)
+    # time.sleep(5)
+    # eagle.run_search('device', mac1, True)
+    # time.sleep(5)
 
+    eagle.click_top_device()
+    time.sleep(5)
+    eagle.navigate_to_device_info()
+
+    time.sleep(5)
+    eagle.is_browsing_history()
+    # time.sleep(10)
+    # print(eagle.is_scan_running())
+    # time.sleep(5)
+    # eagle.navigate_to_home()
+    # time.sleep(5)
+    # print(eagle.is_scan_running())
+    # eagle.search_network('Test_AP')
+    # eagle.open_sensor_interception_page()
+    # time.sleep(10)
+    # eagle.switch_to_new_tab()
+    # time.sleep(3)
+    # eagle.switch_main_view('table')
+    # time.sleep(5)
+    # eagle.search_device('04:d6:aa:e0:f7:83')
+    # time.sleep(5)
+    # eagle.stop_scan_ui()
+
+    # eagle.click_by_pos(220, 20)
+    # time.sleep(10)
+    # eagle.click_by_pos(110, 20)
+    # time.sleep(10)
+    # eagle.click_by_pos(30, 20)
+    # time.sleep(5)
+    # eagle.stop_scan_ui()
+    time.sleep(5)
+    eagle.end_session()
+    print('End')

@@ -1,6 +1,6 @@
 import os
-from pathlib import Path
 import datetime
+from pathlib import Path
 
 
 timestamp = datetime.datetime.utcnow().strftime('%Y-%m-%d__UTC%H-%M-%S')
@@ -19,11 +19,9 @@ class Settings:
 
     WIFI_PROFILES_DIR = os.path.join(wifi_profiles_dir, wifi_profiles_dir_name)
 
-    EAGLE_HOME_PAGE_1 = r'https://192.168.100.199/'
-    EAGLE_HOME_PAGE_2 = r'https://172.16.10.1/'
-    TEST_RESOURCE = r'https://automatetheboringstuff.com'
-
-    APPLICATION_MAIN_PATH = r'C:\myDirectory\uvApplication\UV_Application'
+    EAGLE_HOME_PAGE_1 = r'https://192.168.100.196/'
+    EAGLE_HOME_PAGE_2 = r'https://192.168.100.181/'
+    EAGLE_HOME_PAGE_3 = r'https://172.16.10.1/'
 
     # database (mysql) parameters
     SSH_TUNNEL_HOST = '172.16.10.1'

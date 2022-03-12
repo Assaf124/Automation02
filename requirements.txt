@@ -4,7 +4,7 @@ future==0.16.0
 iso8601==0.1.12
 MouseInfo==0.0.4
 numpy==1.16.2
-Pillow==6.2.1
+Pillow==9.0.1
 plumbum==1.6.7
 PyAutoGUI==0.9.47
 PyGetWindow==0.0.7
